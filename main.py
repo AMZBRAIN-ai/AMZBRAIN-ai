@@ -63,6 +63,8 @@ async def fun1():
 async def trigger_functions():
     try:
         # Call the functions here
+        print("GOOGLE_CREDENTIALS_JSON:", os.getenv("GOOGLE_CREDENTIALS_JSON"))
+
         print("Generating Google Sheet:")
 
         match_and_create_google_sheet(credentials_file, amazon_sheet_url, scrap_sheet_url, output_sheet_url, product_url)
@@ -92,10 +94,20 @@ def append_to_google_doc(doc_id, text):
     ]
     docs_service.documents().batchUpdate(documentId=doc_id, body={"requests": requests}).execute()
 
-def authenticate_gspread(credentials_file):
+def authenticate_gspread():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
+    google_credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if not google_credentials_json:
+        raise ValueError("GOOGLE_CREDENTIALS_JSON is not set in the environment variables")
+    credentials_dict = json.loads(google_credentials_json)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
     return gspread.authorize(creds)
+
+
+# def authenticate_gspread(credentials_file):
+#     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+#     creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
+#     return gspread.authorize(creds)
 
 def get_google_sheet_data(gc, sheet_url):
     sheet = gc.open_by_url(sheet_url).sheet1
@@ -160,7 +172,7 @@ def get_top_matches(product_info, field_name, field_values):
     return [match for match in matches if match]
 
 def match_and_create_google_sheet(credentials_file, amazon_sheet_url, scrap_sheet_url, output_sheet_url, product_url):
-    gc = authenticate_gspread(credentials_file)
+    gc = authenticate_gspread()
     amazon_df = get_google_sheet_data(gc, amazon_sheet_url)
     scrap_df = get_google_sheet_data(gc, scrap_sheet_url)
     
