@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi import FastAPI
 from pydantic import BaseModel
 import asyncio
+import json
 
 app = FastAPI()
 
@@ -32,11 +33,12 @@ google_x509_cert_url = os.getenv("GOOGLE_X509_CERT_URL")
 DOCUMENT_ID = os.getenv("DOCUMENT_ID")
 
 SCOPES = ["https://www.googleapis.com/auth/documents"]
-SERVICE_ACCOUNT_FILE = "google-credentials.json"
 
-credentials = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
+google_credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+if not google_credentials_json:
+    raise ValueError("GOOGLE_CREDENTIALS_JSON is not set in the .env file")
+credentials_dict = json.loads(google_credentials_json)
+credentials = service_account.Credentials.from_service_account_info(credentials_dict)
 docs_service = build("docs", "v1", credentials=credentials)
 
 @app.get("/")
@@ -400,3 +402,10 @@ client = openai.OpenAI(api_key=api_key)
 # generate_amazon_bullets()
 # generate_amazon_description()
 # generate_amazon_title()
+
+# SERVICE_ACCOUNT_FILE = "google-credentials.json"
+
+# credentials = service_account.Credentials.from_service_account_file(
+#     SERVICE_ACCOUNT_FILE, scopes=SCOPES
+# )
+# docs_service = build("docs", "v1", credentials=credentials)
