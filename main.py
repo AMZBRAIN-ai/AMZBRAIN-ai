@@ -19,6 +19,7 @@ import re
 
 app = FastAPI()
 
+# print("hello")
 class RequestData(BaseModel):
     scrape_url: str
     keyword_url: str
