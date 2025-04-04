@@ -43,12 +43,38 @@ DOCUMENT_ID = os.getenv("DOCUMENT_ID")
 
 SCOPES = ["https://www.googleapis.com/auth/documents"]
 
-google_credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
-if not google_credentials_json:
-    raise ValueError("GOOGLE_CREDENTIALS_JSON is not set in the .env file")
-credentials_dict = json.loads(google_credentials_json)
-credentials = service_account.Credentials.from_service_account_info(credentials_dict)
+
+credentials = {
+    "type": os.getenv("type", ""),
+    "project_id": os.getenv("project_id", ""),
+    "private_key_id": os.getenv("private_key_id", ""),
+    "private_key": os.getenv("private_key", "").replace('\\n', '\n'),  # Ensure correct newlines
+    "client_email": os.getenv("client_email", ""),
+    "client_id": os.getenv("client_id", ""),
+    "auth_uri": os.getenv("auth_uri", ""),
+    "token_uri": os.getenv("token_uri", ""),
+    "auth_provider_x509_cert_url": os.getenv("auth_provider_x509_cert_url", ""),
+    "client_x509_cert_url": os.getenv("client_x509_cert_url", ""),
+    "universe_domain": os.getenv("universe_domain", "")
+}
+
+json_filename = "google_credentials.json"
+
+with open(json_filename, "w") as json_file:
+    json.dump(credentials, json_file, indent=4)
+SERVICE_ACCOUNT_FILE =json_filename
+
+credentials = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=SCOPES
+)
 docs_service = build("docs", "v1", credentials=credentials)
+
+# google_credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+# if not google_credentials_json:
+#     raise ValueError("GOOGLE_CREDENTIALS_JSON is not set in the .env file")
+# credentials_dict = json.loads(google_credentials_json)
+# credentials = service_account.Credentials.from_service_account_info(credentials_dict)
+# docs_service = build("docs", "v1", credentials=credentials)
 
 @app.get("/")
 def read_root():
