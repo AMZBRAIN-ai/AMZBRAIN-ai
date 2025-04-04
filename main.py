@@ -270,7 +270,7 @@ def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, outpu
     return f"Updated Google Sheet: {output_url} (Sheet: Test)"
 
 
-credentials_file = "google-credentials.json"
+credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
 
 async def generate_amazon_title(product_url):
@@ -438,7 +438,7 @@ async def generate_amazon_description(product_url):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating description: {str(e)}")
 
-credentials_file = "google-credentials.json"
+credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
 # def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, output_url, product_url):
 #     gc = authenticate_gspread(credentials_file)
