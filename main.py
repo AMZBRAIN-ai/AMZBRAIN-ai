@@ -25,7 +25,8 @@ class RequestData(BaseModel):
     keyword_url: str
     amazon_url: str
     product_url: str
-    output_url:str
+    googlesheet_url:str
+    googledocs_url:str
 
 load_dotenv()
 
@@ -84,42 +85,42 @@ def read_root():
 def hi():
     return {"message": "Hello World"}
 
-@app.post("/fun1")
-async def fun1(data:RequestData):
+@app.post("/title")
+async def title(data:RequestData):
     try:
-        title = await generate_amazon_title(data.product_url)
+        title = await generate_amazon_title(data.product_url ,data.googledocs_url)
         return {"status": "success", "message": "Title generated successfully", "title":title}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
 
-@app.post("/fun2")
-async def fun2(data:RequestData):
+@app.post("/description")
+async def description(data:RequestData):
     try:
-        description = await generate_amazon_description(data.product_url)
+        description = await generate_amazon_description(data.product_url, data.googledocs_url)
         return {"status": "success", "message": "description generated successfully", "description":description}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
 
-@app.post("/fun3")
-async def fun3(data:RequestData):
+@app.post("/bullets")
+async def bullets(data:RequestData):
     try:
-        bullets = await generate_amazon_bullets(data.product_url)
+        bullets = await generate_amazon_bullets(data.product_url, data.googledocs_url)
         return {"status": "success", "message": "bullets generated successfully", "bullets":bullets}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
 
-@app.post("/fun4")
-async def fun4(data:RequestData):
+@app.post("/keywords")
+async def keywords(data:RequestData):
     try:
-        keywords = await generate_amazon_backend_keywords(data.product_url)
+        keywords = await generate_amazon_backend_keywords(data.product_url, data.googledocs_url)
         return {"status": "success", "message": "keywords generated successfully", "keywords":keywords}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
 
-@app.post("/fun5")
-async def fun5(data:RequestData):
+@app.post("/structuredfields")
+async def structuredfields(data:RequestData):
     try:
-        match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.output_url, data.product_url)
+        match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
         return {"status": "success", "message": "google sheet generated successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering functions 5: {e}")
@@ -132,18 +133,18 @@ async def trigger_functions(data: RequestData):
         print("Received Data:")
         print(f"Amazon Sheet URL: {data.amazon_url}")
         print(f"Scrape Sheet URL: {data.scrape_url}")
-        print(f"Output Sheet URL: {data.output_url}")
+        print(f"Output Sheet URL: {data.googlesheet_url}")
         print(f"Product URL: {data.product_url}")
 
         print("Generating Google Sheet:")
 
-        match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.output_url, data.product_url)
+        match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
        
         print("Generating Google Docs:")
-        await generate_amazon_backend_keywords(data.product_url)
-        await generate_amazon_bullets(data.product_url)
-        await generate_amazon_description(data.product_url)
-        await generate_amazon_title(data.product_url)
+        await generate_amazon_backend_keywords(data.product_url, data.googledocs_url)
+        await generate_amazon_bullets(data.product_url, data.googledocs_url)
+        await generate_amazon_description(data.product_url, data.googledocs_url)
+        await generate_amazon_title(data.product_url, data.googledocs_url)
         print("Results Generated")
         return {
             "status": "success", 
@@ -223,7 +224,7 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     matches = response.choices[0].message.content.strip().split(", ")
     return [match for match in matches if match]
     
-def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, output_url, product_url):
+def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googlesheet_url, product_url):
     """Main function to process field matching and update Google Sheets."""
     gc = authenticate_gspread(credentials_file)
     
@@ -263,17 +264,17 @@ def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, outpu
         matched_data["AI Best Matched 5"].append(ai_matches[4])
 
     matched_df = pd.DataFrame(matched_data)
-    output_sheet = gc.open_by_url(output_url).worksheet("Test")
+    output_sheet = gc.open_by_url(googlesheet_url).worksheet("Test")
     values = [matched_df.columns.tolist()] + matched_df.values.tolist()
     output_sheet.insert_rows(values, row=1)
     
-    return f"Updated Google Sheet: {output_url} (Sheet: Test)"
+    return f"Updated Google Sheet: {googlesheet_url} (Sheet: Test)"
 
 
-credentials_file = "google-credentials.json"
+credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
 
-async def generate_amazon_title(product_url):
+async def generate_amazon_title(product_url, googledocs_url):
     title_prompt = f"""
     You are an expert in writing Amazon product titles optimized for search and conversions.  
     Your task is to generate a compelling, keyword-rich title using the exact product details provided.  
@@ -300,12 +301,12 @@ async def generate_amazon_title(product_url):
         )
         title = response.choices[0].message.content.strip()
         print("Generated Amazon Product Title")
-        append_to_google_doc(DOCUMENT_ID, f"Amazon Product Title:\n{title}")
+        append_to_google_doc(googledocs_url, f"Amazon Product Title:\n{title}")
         return title
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating title: {str(e)}")
 
-async def generate_amazon_bullets(product_url):
+async def generate_amazon_bullets(product_url, googledocs_url):
     bullets_prompt = f"""
     Act as an Amazon SEO expert. Extract **ONLY** verified product details from the provided data—no assumptions, no extra words.  
     Generate **five bullet points** highlighting the **key features and benefits** exactly as described in the product details.  
@@ -342,12 +343,12 @@ async def generate_amazon_bullets(product_url):
         )
         bullets = response.choices[0].message.content.strip()
         print("Generated Amazon Bullet Points")
-        append_to_google_doc(DOCUMENT_ID, f"Amazon Bullet Points:\n{bullets}")
+        append_to_google_doc(googledocs_url, f"Amazon Bullet Points:\n{bullets}")
         return bullets
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating bullets: {str(e)}")
 
-async def generate_amazon_backend_keywords(product_url):
+async def generate_amazon_backend_keywords(product_url, googledocs_url):
     keywords_prompt = f"""
     please make sure to generate a total of 500 keywords, dont write more or less
     Amazon SEO Backend Keywords Prompt (500 Characters, No Repetition, High Conversion, Feature-Focused)
@@ -385,14 +386,14 @@ async def generate_amazon_backend_keywords(product_url):
         backend_keywords = backend_keywords.replace(",", " ")  
         match = re.match(r'^(.{1,500})\b', backend_keywords)
         short_keywords = match.group(1) if match else backend_keywords[:500] 
-        append_to_google_doc(DOCUMENT_ID, f"Amazon Keywords:\n{short_keywords}")
+        append_to_google_doc(googledocs_url, f"Amazon Keywords:\n{short_keywords}")
 
 
         return backend_keywords
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating keywords: {str(e)}")
 
-async def generate_amazon_description(product_url):
+async def generate_amazon_description(product_url, googledocs_url):
     description_prompt = f"""
     Act as an Amazon copywriting expert with 10+ years of experience crafting high-converting, SEO-optimized product
     descriptions that maximize visibility and drive sales.
@@ -433,14 +434,14 @@ async def generate_amazon_description(product_url):
         
         optimized_description = response.choices[0].message.content.strip()
         print("Generated Amazon Product Description")
-        append_to_google_doc(DOCUMENT_ID, f"Amazon Product Description:\n{optimized_description}")
+        append_to_google_doc(googledocs_url, f"Amazon Product Description:\n{optimized_description}")
         return optimized_description
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating description: {str(e)}")
 
-credentials_file = "google-credentials.json"
+credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
-# def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, output_url, product_url):
+# def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googlesheet_url, product_url):
 #     gc = authenticate_gspread(credentials_file)
     
 #     # Load Amazon and Scrap Data
@@ -482,10 +483,10 @@ client = openai.OpenAI(api_key=api_key)
 #         matched_df = pd.DataFrame(matched_data)
 
 #         # Write to Google Sheets without deleting existing data
-#         output_sheet = gc.open_by_url(output_url).worksheet("Test")
+#         output_sheet = gc.open_by_url(googlesheet_url).worksheet("Test")
 #         values = [matched_df.columns.tolist()] + matched_df.values.tolist()
 #         output_sheet.insert_rows(values, row=1)
-#         print(f"New matching fields with values have been inserted at the top of the Google Sheet: {output_url} (Sheet: Test)")
+#         print(f"New matching fields with values have been inserted at the top of the Google Sheet: {googlesheet_url} (Sheet: Test)")
 #     else:
 #         print("No matching fields found.")
 
@@ -700,7 +701,7 @@ client = openai.OpenAI(api_key=api_key)
 # generate_amazon_description()
 # generate_amazon_title()
 
-# SERVICE_ACCOUNT_FILE = "google-credentials.json"
+# SERVICE_ACCOUNT_FILE = "google_credentials.json"
 
 # credentials = service_account.Credentials.from_service_account_file(
 #     SERVICE_ACCOUNT_FILE, scopes=SCOPES
