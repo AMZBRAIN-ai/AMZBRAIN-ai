@@ -91,7 +91,7 @@ async def title(data:RequestData):
         title = await generate_amazon_title(data.product_url ,data.googledocs_url)
         return {"status": "success", "message": "Title generated successfully", "title":title}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
+        raise HTTPException(status_code=500, detail=f"Error triggering title: {e}")
 
 @app.post("/description")
 async def description(data:RequestData):
@@ -99,7 +99,7 @@ async def description(data:RequestData):
         description = await generate_amazon_description(data.product_url, data.googledocs_url)
         return {"status": "success", "message": "description generated successfully", "description":description}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
+        raise HTTPException(status_code=500, detail=f"Error triggering description: {e}")
 
 @app.post("/bullets")
 async def bullets(data:RequestData):
@@ -107,7 +107,7 @@ async def bullets(data:RequestData):
         bullets = await generate_amazon_bullets(data.product_url, data.googledocs_url)
         return {"status": "success", "message": "bullets generated successfully", "bullets":bullets}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
+        raise HTTPException(status_code=500, detail=f"Error triggering bullets: {e}")
 
 @app.post("/keywords")
 async def keywords(data:RequestData):
@@ -115,7 +115,7 @@ async def keywords(data:RequestData):
         keywords = await generate_amazon_backend_keywords(data.product_url, data.googledocs_url)
         return {"status": "success", "message": "keywords generated successfully", "keywords":keywords}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
+        raise HTTPException(status_code=500, detail=f"Error triggering keywords: {e}")
 
 @app.post("/structuredfields")
 async def structuredfields(data:RequestData):
@@ -123,7 +123,7 @@ async def structuredfields(data:RequestData):
         match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
         return {"status": "success", "message": "google sheet generated successfully"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering functions 5: {e}")
+        raise HTTPException(status_code=500, detail=f"Error triggering structuredfields: {e}")
 
 
 @app.get("/trigger")
@@ -151,7 +151,7 @@ async def trigger_functions(data: RequestData):
             "message": "All content generated successfully"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering functions: {e}")
+        raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
 
 def append_to_google_doc(doc_id, text):
     """Append text to a Google Doc."""
