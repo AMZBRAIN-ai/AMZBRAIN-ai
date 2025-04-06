@@ -1,3 +1,18 @@
+# save
+# {
+#     "scrape_url": "https://docs.google.com/spreadsheets/d/18UoIYMIzRXZzsWX12oTsEk13W3jTA9oTd_kT-iSQb4c/edit",
+#     "keyword_url": "https://docs.google.com/spreadsheets/d/1CvPneSUomXjHwcfqNJS_zYCukpq0AjxpYnczWkGuDqw/edit",
+#     "amazon_url": "https://docs.google.com/spreadsheets/d/1A3SW1gqTQrB0Z5jGm0PcNQJnw2IcGFHuZd1aRPLt8ZQ/edit",
+#     "product_url": "{{ $('product_url1').item.json.product_url }}",
+#     "googlesheet_url":"{{ $json.sheet }}",
+#     "googledocs_url":"{{ $json.docs }}"
+# }
+
+
+
+# {{ 'https://docs.google.com/document/d/' + $json.id + '/' }}
+
+
 import gspread
 import pandas as pd
 import requests
@@ -130,14 +145,7 @@ async def structuredfields(data:RequestData):
 @app.post("/trigger")
 async def trigger_functions(data: RequestData):
     try:
-        print("Received Data:")
-        print(f"Amazon Sheet URL: {data.amazon_url}")
-        print(f"Scrape Sheet URL: {data.scrape_url}")
-        print(f"Output Sheet URL: {data.googlesheet_url}")
-        print(f"Product URL: {data.product_url}")
-
         print("Generating Google Sheet:")
-
         match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
        
         print("Generating Google Docs:")
@@ -154,6 +162,7 @@ async def trigger_functions(data: RequestData):
         raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
 
 def append_to_google_doc(doc_id, text):
+    print('append_to_google_doc')
     """Append text to a Google Doc."""
     requests = [
         {
@@ -166,33 +175,42 @@ def append_to_google_doc(doc_id, text):
     docs_service.documents().batchUpdate(documentId=doc_id, body={"requests": requests}).execute()
 
 def authenticate_gspread(credentials_file):
+    print('authenticate_gspread')
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
     return gspread.authorize(creds)
 
 def get_google_sheet_data(gc, sheet_url):
+    print('get_google_sheet_data')
     sheet = gc.open_by_url(sheet_url).sheet1
     df = get_as_dataframe(sheet, evaluate_formulas=True, skip_blank_rows=True)
     return df.dropna(how="all")
 
 def scrape_product_info(product_url):
+    print('scrape_product_info')
     """Extracts ALL text from the product page, removing excessive whitespace."""
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    
     try:
+        print("here 1")
         response = requests.get(product_url, headers=headers)
         if response.status_code != 200:
             print(f"Failed to fetch product page: {response.status_code}")
             return None
+        print("here 2")
         
         soup = BeautifulSoup(response.text, "html.parser")
         all_text = soup.get_text(separator=" ").lower()
         cleaned_text = re.sub(r'\s+', ' ', all_text).strip()
+        print(cleaned_text)
         return cleaned_text
     except Exception as e:
         print(f"Error scraping product info: {e}")
         return None
 
 def get_top_matches(product_info, field_name, field_value, possible_values):
+    # print('get_top_matches')
+    
     """Uses OpenAI to find the best matches for a given field from the product description."""
     ai_prompt = f"""
     You are an AI specializing in product attribute matching.
@@ -225,6 +243,7 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     return [match for match in matches if match]
     
 def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googlesheet_url, product_url):
+    print('match_and_create_google_sheet')
     """Main function to process field matching and update Google Sheets."""
     gc = authenticate_gspread(credentials_file)
     
@@ -235,18 +254,28 @@ def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googl
     if scraped_text is None:
         return "Scraping failed."
     
+    print('here 3')
     amazon_fields = set(amazon_df.iloc[1:, 0].dropna())
+    print(amazon_fields)
+
     scrap_fields = set(scrap_df.iloc[1:, 0].dropna())
+    print(scrap_fields)
+
     matching_fields = list(amazon_fields.intersection(scrap_fields))
+    print(matching_fields)
+
     
     if not matching_fields:
         return "No matching fields found."
     
     matched_data = {"Field Name": [], "Value": [], "AI Best Matched 1": [], "AI Best Matched 2": [], "AI Best Matched 3": [], "AI Best Matched 4": [], "AI Best Matched 5": []}
+    print("matching_data is")
     
     for field in matching_fields:
         matched_data["Field Name"].append(field)
         
+        print("in loop")
+
         value = amazon_df.loc[amazon_df.iloc[:, 0] == field].iloc[:, 1].values
         matched_value = value[0] if len(value) > 0 else ""
         
@@ -264,11 +293,12 @@ def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googl
         matched_data["AI Best Matched 5"].append(ai_matches[4])
 
     matched_df = pd.DataFrame(matched_data)
-    output_sheet = gc.open_by_url(googlesheet_url).worksheet("Test")
+    output_sheet = gc.open_by_url(googlesheet_url).worksheet("Sheet1")
     values = [matched_df.columns.tolist()] + matched_df.values.tolist()
     output_sheet.insert_rows(values, row=1)
-    
-    return f"Updated Google Sheet: {googlesheet_url} (Sheet: Test)"
+    print("here 5")
+
+    return f"Updated Google Sheet: {googlesheet_url} (Sheet: 1)"
 
 
 credentials_file = "google_credentials.json"
