@@ -135,7 +135,7 @@ async def keywords(data:RequestData):
 @app.post("/structuredfields")
 async def structuredfields(data:RequestData):
     try:
-        match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
+        # match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
         return {"status": "success", "message": "google sheet generated successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering structuredfields: {e}")
@@ -146,20 +146,68 @@ async def structuredfields(data:RequestData):
 async def trigger_functions(data: RequestData):
     try:
         print("Generating Google Sheet:")
-        match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
+        message = match_and_create_new_google_sheet(
+            credentials_file, data.amazon_url, data.scrape_url, data.product_url
+        )
+        return {"status": "success", "message": message}
+    
+        # match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
        
-        print("Generating Google Docs:")
-        await generate_amazon_backend_keywords(data.product_url, data.googledocs_url)
-        await generate_amazon_bullets(data.product_url, data.googledocs_url)
-        await generate_amazon_description(data.product_url, data.googledocs_url)
-        await generate_amazon_title(data.product_url, data.googledocs_url)
-        print("Results Generated")
-        return {
-            "status": "success", 
-            "message": "All content generated successfully"
-        }
+        # print("Generating Google Docs:")
+        # await generate_amazon_backend_keywords(data.product_url, data.googledocs_url)
+        # await generate_amazon_bullets(data.product_url, data.googledocs_url)
+        # await generate_amazon_description(data.product_url, data.googledocs_url)
+        # await generate_amazon_title(data.product_url, data.googledocs_url)
+        # print("Results Generated")
+        # return {
+        #     "status": "success", 
+        #     "message": "All content generated successfully"
+        # }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
+
+
+def make_sheet_public_editable(file_id: str, credentials_file: str):
+    """
+    Uses the Google Drive API to update the sharing permission of a file so that anyone with the link can edit.
+    """
+    try:
+        creds = service_account.Credentials.from_service_account_file(
+            credentials_file,
+            scopes=["https://www.googleapis.com/auth/drive"]
+        )
+        drive_service = build('drive', 'v3', credentials=creds)
+        permission = {
+            'type': 'anyone',
+            'role': 'writer'
+        }
+        drive_service.permissions().create(
+            fileId=file_id,
+            body=permission,
+            fields='id'
+        ).execute()
+        print(f"File (ID: {file_id}) is now set to 'Anyone with the link can edit'.")
+    except Exception as e:
+        raise Exception(f"Error making the file public and editable: {e}")
+
+# def make_sheet_public_editable(file_id, credentials_file):
+#     creds = service_account.Credentials.from_service_account_file(
+#         credentials_file,
+#         scopes=['https://www.googleapis.com/auth/drive']
+#     )
+#     drive_service = build('drive', 'v3', credentials=creds)
+    
+#     permission = {
+#         'type': 'anyone',
+#         'role': 'writer'
+#     }
+#     drive_service.permissions().create(
+#         fileId=file_id,
+#         body=permission,
+#         fields='id',
+#     ).execute()
+#     print("Sheet is now editable by anyone with the link.")
+
 
 def append_to_google_doc(doc_id, text):
     print('append_to_google_doc')
@@ -208,6 +256,35 @@ def scrape_product_info(product_url):
         print(f"Error scraping product info: {e}")
         return None
 
+def share_sheet_with_email(file_id, email, credentials_file):
+    print("file_id", file_id)
+    print("email", email)
+    print("credentials_file", credentials_file)
+    """
+    Share the file with a specific email (e.g. your service account) as editor.
+    """
+    creds = service_account.Credentials.from_service_account_file(
+        credentials_file,
+        scopes=['https://www.googleapis.com/auth/drive']
+    )
+    print("creds", creds)
+
+    drive_service = build('drive', 'v3', credentials=creds)
+    print("drive_service", drive_service)
+    
+    permission = {
+        'type': 'user',
+        'role': 'writer',
+        'emailAddress': email
+    }
+    drive_service.permissions().create(
+        fileId=file_id,
+        body=permission,
+        fields='id',
+        sendNotificationEmail=False  # Avoid sending notification emails
+    ).execute()
+    print(f"Sheet is now shared with {email} as editor.")
+
 def get_top_matches(product_info, field_name, field_value, possible_values):
     # print('get_top_matches')
     
@@ -241,48 +318,54 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     
     matches = response.choices[0].message.content.strip().split(", ")
     return [match for match in matches if match]
-    
-def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googlesheet_url, product_url):
-    print('match_and_create_google_sheet')
-    """Main function to process field matching and update Google Sheets."""
+
+def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, scrap_url: str, product_url: str) -> str:
+    """
+    Creates a new Google Sheet, updates its sharing permissions, performs matching between two sheets,
+    and outputs the data to the new spreadsheet.
+    """
+    # Authorize gspread and create a new spreadsheet
     gc = authenticate_gspread(credentials_file)
+    new_sheet_title = "Output Sheet"
+    new_spreadsheet = gc.create(new_sheet_title)
+    new_sheet_url = new_spreadsheet.url
+    file_id = new_spreadsheet.id
+    print(f"Created new spreadsheet with title '{new_sheet_title}' and ID: {file_id}")
     
+    # Update sharing permissions so anyone with the link can edit
+    make_sheet_public_editable(file_id, credentials_file)
+    
+    # Get data from the provided Amazon and Scrap sheets
     amazon_df = get_google_sheet_data(gc, amazon_url)
     scrap_df = get_google_sheet_data(gc, scrap_url)
     scraped_text = scrape_product_info(product_url)
-    
     if scraped_text is None:
         return "Scraping failed."
     
-    print('here 3')
+    # Find matching fields between the two sheets
+    print()
     amazon_fields = set(amazon_df.iloc[1:, 0].dropna())
-    print(amazon_fields)
-
     scrap_fields = set(scrap_df.iloc[1:, 0].dropna())
-    print(scrap_fields)
-
     matching_fields = list(amazon_fields.intersection(scrap_fields))
-    print(matching_fields)
-
-    
     if not matching_fields:
         return "No matching fields found."
     
-    matched_data = {"Field Name": [], "Value": [], "AI Best Matched 1": [], "AI Best Matched 2": [], "AI Best Matched 3": [], "AI Best Matched 4": [], "AI Best Matched 5": []}
-    print("matching_data is")
-    
+    # Prepare data for output
+    matched_data = {
+        "Field Name": [],
+        "Value": [],
+        "AI Best Matched 1": [],
+        "AI Best Matched 2": [],
+        "AI Best Matched 3": [],
+        "AI Best Matched 4": [],
+        "AI Best Matched 5": []
+    }
     for field in matching_fields:
         matched_data["Field Name"].append(field)
-        
-        print("in loop")
-
         value = amazon_df.loc[amazon_df.iloc[:, 0] == field].iloc[:, 1].values
         matched_value = value[0] if len(value) > 0 else ""
-        
         possible_options = scrap_df.loc[scrap_df.iloc[:, 0] == field].iloc[:, 1].dropna().tolist()
-        
         ai_matches = get_top_matches(scraped_text, field, matched_value, possible_options)
-        
         ai_matches = ai_matches[:5] + [""] * (5 - len(ai_matches))  # Ensure 5 matches
         
         matched_data["Value"].append(matched_value)
@@ -291,15 +374,84 @@ def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googl
         matched_data["AI Best Matched 3"].append(ai_matches[2])
         matched_data["AI Best Matched 4"].append(ai_matches[3])
         matched_data["AI Best Matched 5"].append(ai_matches[4])
-
+    
     matched_df = pd.DataFrame(matched_data)
-    output_sheet = gc.open_by_url(googlesheet_url).worksheet("Sheet1")
+    
+    # Write the DataFrame to the new spreadsheet (first worksheet)
+    output_sheet = new_spreadsheet.sheet1
     values = [matched_df.columns.tolist()] + matched_df.values.tolist()
     output_sheet.insert_rows(values, row=1)
-    print("here 5")
+    print("Data written to new spreadsheet.")
+    
+    return f"{new_sheet_url}"
+  
+# def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googlesheet_url, product_url):
+#     print('match_and_create_google_sheet')
+#     match = re.search(r"/d/([a-zA-Z0-9-_]+)", googlesheet_url)
+#     if match:
+#         file_id = match.group(1)
+#         creds_temp = service_account.Credentials.from_service_account_file(credentials_file)
+#         service_account_email = creds_temp.service_account_email
+#         share_sheet_with_email(file_id, service_account_email, credentials_file)      
+#         print("file shared")
+#         make_sheet_public_editable(file_id, credentials_file)
+#         print("file editable")
+        
+#     else:
+#         print("Could not extract file ID from sheet URL.")
+#         return "Invalid Google Sheet URL."
 
-    return f"Updated Google Sheet: {googlesheet_url} (Sheet: 1)"
+#     creds = service_account.Credentials.from_service_account_file(credentials_file)
+#     gc = gspread.authorize(creds)
 
+#     amazon_df = get_google_sheet_data(gc, amazon_url)
+#     scrap_df = get_google_sheet_data(gc, scrap_url)
+#     scraped_text = scrape_product_info(product_url)
+    
+#     if scraped_text is None:
+#         return "Scraping failed."
+    
+#     print('here 3')
+#     amazon_fields = set(amazon_df.iloc[1:, 0].dropna())
+#     print(amazon_fields)
+
+#     scrap_fields = set(scrap_df.iloc[1:, 0].dropna())
+#     print(scrap_fields)
+
+#     matching_fields = list(amazon_fields.intersection(scrap_fields))
+#     print(matching_fields)
+
+#     if not matching_fields:
+#         return "No matching fields found."
+    
+#     matched_data = {"Field Name": [], "Value": [], "AI Best Matched 1": [], "AI Best Matched 2": [], "AI Best Matched 3": [], "AI Best Matched 4": [], "AI Best Matched 5": []}
+    
+#     for field in matching_fields:
+#         matched_data["Field Name"].append(field)
+#         print("in loop")
+
+#         value = amazon_df.loc[amazon_df.iloc[:, 0] == field].iloc[:, 1].values
+#         matched_value = value[0] if len(value) > 0 else ""
+        
+#         possible_options = scrap_df.loc[scrap_df.iloc[:, 0] == field].iloc[:, 1].dropna().tolist()
+        
+#         ai_matches = get_top_matches(scraped_text, field, matched_value, possible_options)
+#         ai_matches = ai_matches[:5] + [""] * (5 - len(ai_matches))  # Ensure 5 matches
+        
+#         matched_data["Value"].append(matched_value)
+#         matched_data["AI Best Matched 1"].append(ai_matches[0])
+#         matched_data["AI Best Matched 2"].append(ai_matches[1])
+#         matched_data["AI Best Matched 3"].append(ai_matches[2])
+#         matched_data["AI Best Matched 4"].append(ai_matches[3])
+#         matched_data["AI Best Matched 5"].append(ai_matches[4])
+
+#     matched_df = pd.DataFrame(matched_data)
+#     output_sheet = gc.open_by_url(googlesheet_url).worksheet("Sheet1")
+#     values = [matched_df.columns.tolist()] + matched_df.values.tolist()
+#     output_sheet.insert_rows(values, row=1)
+#     print("here 5")
+
+#     return f"Updated Google Sheet: {googlesheet_url} (Sheet: 1)"
 
 credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
