@@ -350,6 +350,7 @@ def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, sc
         return "No matching fields found."
     
     # Prepare data for output
+    print('before matched_data')
     matched_data = {
         "Field Name": [],
         "Value": [],
@@ -360,6 +361,8 @@ def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, sc
         "AI Best Matched 5": []
     }
     for field in matching_fields:
+        print('inside matched_data loop')
+
         matched_data["Field Name"].append(field)
         value = amazon_df.loc[amazon_df.iloc[:, 0] == field].iloc[:, 1].values
         matched_value = value[0] if len(value) > 0 else ""
@@ -375,6 +378,7 @@ def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, sc
         matched_data["AI Best Matched 5"].append(ai_matches[4])
     
     matched_df = pd.DataFrame(matched_data)
+    print('outside matched_data loop')
     
     # Write the DataFrame to the new spreadsheet (first worksheet)
     output_sheet = new_spreadsheet.sheet1
