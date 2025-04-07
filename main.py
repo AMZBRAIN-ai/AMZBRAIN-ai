@@ -1,18 +1,3 @@
-# save
-# {
-#     "scrape_url": "https://docs.google.com/spreadsheets/d/18UoIYMIzRXZzsWX12oTsEk13W3jTA9oTd_kT-iSQb4c/edit",
-#     "keyword_url": "https://docs.google.com/spreadsheets/d/1CvPneSUomXjHwcfqNJS_zYCukpq0AjxpYnczWkGuDqw/edit",
-#     "amazon_url": "https://docs.google.com/spreadsheets/d/1A3SW1gqTQrB0Z5jGm0PcNQJnw2IcGFHuZd1aRPLt8ZQ/edit",
-#     "product_url": "{{ $('product_url1').item.json.product_url }}",
-#     "googlesheet_url":"{{ $json.sheet }}",
-#     "googledocs_url":"{{ $json.docs }}"
-# }
-
-
-
-# {{ 'https://docs.google.com/document/d/' + $json.id + '/' }}
-
-
 import gspread
 import pandas as pd
 import requests
@@ -34,14 +19,11 @@ import re
 
 app = FastAPI()
 
-# print("hello")
 class RequestData(BaseModel):
     scrape_url: str
     keyword_url: str
     amazon_url: str
     product_url: str
-    googlesheet_url:str
-    googledocs_url:str
 
 load_dotenv()
 
@@ -85,13 +67,6 @@ credentials = service_account.Credentials.from_service_account_file(
 )
 docs_service = build("docs", "v1", credentials=credentials)
 
-# google_credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
-# if not google_credentials_json:
-#     raise ValueError("GOOGLE_CREDENTIALS_JSON is not set in the .env file")
-# credentials_dict = json.loads(google_credentials_json)
-# credentials = service_account.Credentials.from_service_account_info(credentials_dict)
-# docs_service = build("docs", "v1", credentials=credentials)
-
 @app.get("/")
 def read_root():
     return {"message": "Hello World"}
@@ -103,7 +78,7 @@ def hi():
 @app.post("/title")
 async def title(data:RequestData):
     try:
-        title = await generate_amazon_title(data.product_url ,data.googledocs_url)
+        title = await generate_amazon_title(data.product_url)
         return {"status": "success", "message": "Title generated successfully", "title":title}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering title: {e}")
@@ -111,7 +86,7 @@ async def title(data:RequestData):
 @app.post("/description")
 async def description(data:RequestData):
     try:
-        description = await generate_amazon_description(data.product_url, data.googledocs_url)
+        description = await generate_amazon_description(data.product_url)
         return {"status": "success", "message": "description generated successfully", "description":description}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering description: {e}")
@@ -119,7 +94,7 @@ async def description(data:RequestData):
 @app.post("/bullets")
 async def bullets(data:RequestData):
     try:
-        bullets = await generate_amazon_bullets(data.product_url, data.googledocs_url)
+        bullets = await generate_amazon_bullets(data.product_url)
         return {"status": "success", "message": "bullets generated successfully", "bullets":bullets}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering bullets: {e}")
@@ -127,7 +102,7 @@ async def bullets(data:RequestData):
 @app.post("/keywords")
 async def keywords(data:RequestData):
     try:
-        keywords = await generate_amazon_backend_keywords(data.product_url, data.googledocs_url)
+        keywords = await generate_amazon_backend_keywords(data.product_url)
         return {"status": "success", "message": "keywords generated successfully", "keywords":keywords}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering keywords: {e}")
@@ -149,20 +124,22 @@ async def trigger_functions(data: RequestData):
         message = match_and_create_new_google_sheet(
             credentials_file, data.amazon_url, data.scrape_url, data.product_url
         )
-        return {"status": "success", "message": message}
+        # return {"status": "success", "message": message}
     
-        # match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
-       
-        # print("Generating Google Docs:")
-        # await generate_amazon_backend_keywords(data.product_url, data.googledocs_url)
-        # await generate_amazon_bullets(data.product_url, data.googledocs_url)
-        # await generate_amazon_description(data.product_url, data.googledocs_url)
-        # await generate_amazon_title(data.product_url, data.googledocs_url)
-        # print("Results Generated")
-        # return {
-        #     "status": "success", 
-        #     "message": "All content generated successfully"
-        # }
+        doc_title = "Amazon OpenFields"
+        doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
+        make_sheet_public_editable(doc_id, credentials_file)
+        print("Generating Google Docs:")
+        await generate_amazon_backend_keywords(data.product_url, doc_id)
+        await generate_amazon_bullets(data.product_url, doc_id)
+        await generate_amazon_description(data.product_url, doc_id)
+        await generate_amazon_title(data.product_url, doc_id)
+        print("Results Generated")
+        return {
+            "status": "success", 
+            "google_sheets":message,
+            "google_docs": doc_url
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
 
@@ -189,25 +166,6 @@ def make_sheet_public_editable(file_id: str, credentials_file: str):
         print(f"File (ID: {file_id}) is now set to 'Anyone with the link can edit'.")
     except Exception as e:
         raise Exception(f"Error making the file public and editable: {e}")
-
-# def make_sheet_public_editable(file_id, credentials_file):
-#     creds = service_account.Credentials.from_service_account_file(
-#         credentials_file,
-#         scopes=['https://www.googleapis.com/auth/drive']
-#     )
-#     drive_service = build('drive', 'v3', credentials=creds)
-    
-#     permission = {
-#         'type': 'anyone',
-#         'role': 'writer'
-#     }
-#     drive_service.permissions().create(
-#         fileId=file_id,
-#         body=permission,
-#         fields='id',
-#     ).execute()
-#     print("Sheet is now editable by anyone with the link.")
-
 
 def append_to_google_doc(doc_id, text):
     print('append_to_google_doc')
@@ -387,79 +345,36 @@ def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, sc
     print("Data written to new spreadsheet.")
     
     return f"{new_sheet_url}"
-  
-# def match_and_create_google_sheet(credentials_file, amazon_url, scrap_url, googlesheet_url, product_url):
-#     print('match_and_create_google_sheet')
-#     match = re.search(r"/d/([a-zA-Z0-9-_]+)", googlesheet_url)
-#     if match:
-#         file_id = match.group(1)
-#         creds_temp = service_account.Credentials.from_service_account_file(credentials_file)
-#         service_account_email = creds_temp.service_account_email
-#         share_sheet_with_email(file_id, service_account_email, credentials_file)      
-#         print("file shared")
-#         make_sheet_public_editable(file_id, credentials_file)
-#         print("file editable")
-        
-#     else:
-#         print("Could not extract file ID from sheet URL.")
-#         return "Invalid Google Sheet URL."
 
-#     creds = service_account.Credentials.from_service_account_file(credentials_file)
-#     gc = gspread.authorize(creds)
+def create_new_google_doc(title: str, credentials_file: str):
+    """
+    Creates a new Google Doc with the given title using the Docs API.
+    Returns the document ID and URL.
+    """
+    try:
+        creds = service_account.Credentials.from_service_account_file(
+            credentials_file,
+            scopes=["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive"]
+        )
+        docs_service = build("docs", "v1", credentials=creds)
+        body = {"title": title}
+        doc = docs_service.documents().create(body=body).execute()
+        doc_id = doc.get("documentId")
+        doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
+        print(f"Created new document with title '{title}', ID: {doc_id}")
+        return doc_id, doc_url
+    except Exception as e:
+        raise Exception(f"Error creating new Google Doc: {e}")
 
-#     amazon_df = get_google_sheet_data(gc, amazon_url)
-#     scrap_df = get_google_sheet_data(gc, scrap_url)
-#     scraped_text = scrape_product_info(product_url)
-    
-#     if scraped_text is None:
-#         return "Scraping failed."
-    
-#     print('here 3')
-#     amazon_fields = set(amazon_df.iloc[1:, 0].dropna())
-#     print(amazon_fields)
-
-#     scrap_fields = set(scrap_df.iloc[1:, 0].dropna())
-#     print(scrap_fields)
-
-#     matching_fields = list(amazon_fields.intersection(scrap_fields))
-#     print(matching_fields)
-
-#     if not matching_fields:
-#         return "No matching fields found."
-    
-#     matched_data = {"Field Name": [], "Value": [], "AI Best Matched 1": [], "AI Best Matched 2": [], "AI Best Matched 3": [], "AI Best Matched 4": [], "AI Best Matched 5": []}
-    
-#     for field in matching_fields:
-#         matched_data["Field Name"].append(field)
-#         print("in loop")
-
-#         value = amazon_df.loc[amazon_df.iloc[:, 0] == field].iloc[:, 1].values
-#         matched_value = value[0] if len(value) > 0 else ""
-        
-#         possible_options = scrap_df.loc[scrap_df.iloc[:, 0] == field].iloc[:, 1].dropna().tolist()
-        
-#         ai_matches = get_top_matches(scraped_text, field, matched_value, possible_options)
-#         ai_matches = ai_matches[:5] + [""] * (5 - len(ai_matches))  # Ensure 5 matches
-        
-#         matched_data["Value"].append(matched_value)
-#         matched_data["AI Best Matched 1"].append(ai_matches[0])
-#         matched_data["AI Best Matched 2"].append(ai_matches[1])
-#         matched_data["AI Best Matched 3"].append(ai_matches[2])
-#         matched_data["AI Best Matched 4"].append(ai_matches[3])
-#         matched_data["AI Best Matched 5"].append(ai_matches[4])
-
-#     matched_df = pd.DataFrame(matched_data)
-#     output_sheet = gc.open_by_url(googlesheet_url).worksheet("Sheet1")
-#     values = [matched_df.columns.tolist()] + matched_df.values.tolist()
-#     output_sheet.insert_rows(values, row=1)
-#     print("here 5")
-
-#     return f"Updated Google Sheet: {googlesheet_url} (Sheet: 1)"
 
 credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
 
-async def generate_amazon_title(product_url, googledocs_url):
+async def generate_amazon_title(product_url, doc_id):
+    # doc_title = "Amazon Title Output"
+    # doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
+    # make_sheet_public_editable(doc_id, credentials_file)
+   
     title_prompt = f"""
     You are an expert in writing Amazon product titles optimized for search and conversions.  
     Your task is to generate a compelling, keyword-rich title using the exact product details provided.  
@@ -486,12 +401,16 @@ async def generate_amazon_title(product_url, googledocs_url):
         )
         title = response.choices[0].message.content.strip()
         print("Generated Amazon Product Title")
-        append_to_google_doc(googledocs_url, f"Amazon Product Title:\n{title}")
+        append_to_google_doc(doc_id, f"Amazon Product Title:\n{title}")
         return title
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating title: {str(e)}")
 
-async def generate_amazon_bullets(product_url, googledocs_url):
+async def generate_amazon_bullets(product_url, doc_id):
+    # doc_title = "Amazon Title Output"
+    # doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
+    # make_sheet_public_editable(doc_id, credentials_file)
+
     bullets_prompt = f"""
     Act as an Amazon SEO expert. Extract **ONLY** verified product details from the provided data—no assumptions, no extra words.  
     Generate **five bullet points** highlighting the **key features and benefits** exactly as described in the product details.  
@@ -528,12 +447,16 @@ async def generate_amazon_bullets(product_url, googledocs_url):
         )
         bullets = response.choices[0].message.content.strip()
         print("Generated Amazon Bullet Points")
-        append_to_google_doc(googledocs_url, f"Amazon Bullet Points:\n{bullets}")
+        append_to_google_doc(doc_id, f"Amazon Bullet Points:\n{bullets}")
         return bullets
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating bullets: {str(e)}")
 
-async def generate_amazon_backend_keywords(product_url, googledocs_url):
+async def generate_amazon_backend_keywords(product_url, doc_id):
+    # doc_title = "Amazon Title Output"
+    # doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
+    # make_sheet_public_editable(doc_id, credentials_file)
+
     keywords_prompt = f"""
     please make sure to generate a total of 500 keywords, dont write more or less
     Amazon SEO Backend Keywords Prompt (500 Characters, No Repetition, High Conversion, Feature-Focused)
@@ -571,14 +494,18 @@ async def generate_amazon_backend_keywords(product_url, googledocs_url):
         backend_keywords = backend_keywords.replace(",", " ")  
         match = re.match(r'^(.{1,500})\b', backend_keywords)
         short_keywords = match.group(1) if match else backend_keywords[:500] 
-        append_to_google_doc(googledocs_url, f"Amazon Keywords:\n{short_keywords}")
+        append_to_google_doc(doc_id, f"Amazon Keywords:\n{short_keywords}")
 
 
         return backend_keywords
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating keywords: {str(e)}")
 
-async def generate_amazon_description(product_url, googledocs_url):
+async def generate_amazon_description(product_url, doc_id):
+    # doc_title = "Amazon Title Output"
+    # doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
+    # make_sheet_public_editable(doc_id, credentials_file)
+
     description_prompt = f"""
     Act as an Amazon copywriting expert with 10+ years of experience crafting high-converting, SEO-optimized product
     descriptions that maximize visibility and drive sales.
@@ -619,7 +546,7 @@ async def generate_amazon_description(product_url, googledocs_url):
         
         optimized_description = response.choices[0].message.content.strip()
         print("Generated Amazon Product Description")
-        append_to_google_doc(googledocs_url, f"Amazon Product Description:\n{optimized_description}")
+        append_to_google_doc(doc_id, f"Amazon Product Description:\n{optimized_description}")
         return optimized_description
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating description: {str(e)}")
