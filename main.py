@@ -250,7 +250,6 @@ def scrape_product_info(product_url):
         soup = BeautifulSoup(response.text, "html.parser")
         all_text = soup.get_text(separator=" ").lower()
         cleaned_text = re.sub(r'\s+', ' ', all_text).strip()
-        print(cleaned_text)
         return cleaned_text
     except Exception as e:
         print(f"Error scraping product info: {e}")
@@ -343,7 +342,7 @@ def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, sc
         return "Scraping failed."
     
     # Find matching fields between the two sheets
-    print()
+    print('before amazon_fields')
     amazon_fields = set(amazon_df.iloc[1:, 0].dropna())
     scrap_fields = set(scrap_df.iloc[1:, 0].dropna())
     matching_fields = list(amazon_fields.intersection(scrap_fields))
