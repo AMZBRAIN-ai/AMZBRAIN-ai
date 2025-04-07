@@ -200,6 +200,8 @@ def scrape_product_info(product_url):
     try:
         print("here 1")
         response = requests.get(product_url, headers=headers)
+        print("response")
+        print(response.status_code)
         if response.status_code != 200:
             print(f"Failed to fetch product page: {response.status_code}")
             return None
