@@ -25,7 +25,7 @@ class RequestData(BaseModel):
     keyword_url: str
     amazon_url: str
     product_url: str
-    emails: List[str]
+    emails: str
 
 load_dotenv()
 
@@ -164,7 +164,7 @@ async def trigger_functions(data: RequestData):
 #     except Exception as e:
 #         raise Exception(f"Error sharing the file with specific emails: {e}")
 
-def make_sheet_public_editable(file_id: str, credentials_file: str, email_list: List[str], service_account_email: str):
+def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, service_account_email: str):
     """
     - Gives editor access to the service account and all specified emails.
     - Makes the file viewable by anyone with the link.
@@ -190,9 +190,7 @@ def make_sheet_public_editable(file_id: str, credentials_file: str, email_list: 
         ).execute()
         print(f"✅ Editor access granted to service account: {service_account_email}")
 
-        # Grant editor access to all other emails
-        for email in email_list:
-            if email != service_account_email:
+        if email != service_account_email:
                 permission_user = {
                     'type': 'user',
                     'role': 'writer',
