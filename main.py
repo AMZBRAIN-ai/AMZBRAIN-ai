@@ -127,8 +127,8 @@ async def trigger_functions(data: RequestData):
         print("Results Generated")
         return {
             "status": "success", 
-            "google_sheets":message
-            # "google_docs": doc_url
+            "google_sheets":message,
+            "google_docs": doc_url
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
