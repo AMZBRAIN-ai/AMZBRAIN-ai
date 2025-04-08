@@ -357,7 +357,7 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     matches = response.choices[0].message.content.strip().split(", ")
     return [match for match in matches if match]
 
-def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, scrap_url: str, product_url: str, emails:List) -> str:
+def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, scrap_url: str, product_url: str, emails:str) -> str:
     """
     Creates a new Google Sheet, updates its sharing permissions, performs matching between two sheets,
     and outputs the data to the new spreadsheet.
