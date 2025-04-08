@@ -16,6 +16,7 @@ from pydantic import BaseModel
 import asyncio
 import json
 import re
+from typing import List
 
 app = FastAPI()
 
@@ -24,23 +25,12 @@ class RequestData(BaseModel):
     keyword_url: str
     amazon_url: str
     product_url: str
+    emails: List[str]
 
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
-google_project_id = os.getenv("GOOGLE_PROJECT_ID")
-google_private_key_id = os.getenv("GOOGLE_PRIVATE_KEY_ID")
-google_private_key = os.getenv("GOOGLE_PRIVATE_KEY")
-google_client_email = os.getenv("GOOGLE_CLIENT_EMAIL")
-google_client_id = os.getenv("GOOGLE_CLIENT_ID")
-google_auth_uri = os.getenv("GOOGLE_AUTH_URI")
-google_token_uri = os.getenv("GOOGLE_TOKEN_URI")
-google_cert_url = os.getenv("GOOGLE_CERT_URL")
-google_x509_cert_url = os.getenv("GOOGLE_X509_CERT_URL")
-DOCUMENT_ID = os.getenv("DOCUMENT_ID")
-
 SCOPES = ["https://www.googleapis.com/auth/documents"]
-
 
 credentials = {
     "type": os.getenv("type", ""),
@@ -55,6 +45,7 @@ credentials = {
     "client_x509_cert_url": os.getenv("client_x509_cert_url", ""),
     "universe_domain": os.getenv("universe_domain", "")
 }
+service_account_email = credentials["client_email"]
 
 json_filename = "google_credentials.json"
 
@@ -122,13 +113,12 @@ async def trigger_functions(data: RequestData):
     try:
         print("Generating Google Sheet:")
         message = match_and_create_new_google_sheet(
-            credentials_file, data.amazon_url, data.scrape_url, data.product_url
+            credentials_file, data.amazon_url, data.scrape_url, data.product_url, data.emails
         )
-        # return {"status": "success", "message": message}
     
         doc_title = "Amazon OpenFields"
         doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
-        make_sheet_public_editable(doc_id, credentials_file)
+        make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email)
         print("Generating Google Docs:")
         await generate_amazon_backend_keywords(data.product_url, doc_id)
         await generate_amazon_bullets(data.product_url, doc_id)
@@ -144,9 +134,40 @@ async def trigger_functions(data: RequestData):
         raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
 
 
-def make_sheet_public_editable(file_id: str, credentials_file: str):
+
+
+# def make_sheet_public_editable(file_id: str, email_list: list, credentials_file: str):
+#     """
+#     Grants edit access to a list of specific email addresses using the Google Drive API.
+#     """
+#     try:
+#         creds = service_account.Credentials.from_service_account_file(
+#             credentials_file,
+#             scopes=["https://www.googleapis.com/auth/drive"]
+#         )
+#         drive_service = build('drive', 'v3', credentials=creds)
+
+#         for email in email_list:
+#             permission = {
+#                 'type': 'user',
+#                 'role': 'writer',
+#                 'emailAddress': email
+#             }
+#             drive_service.permissions().create(
+#                 fileId=file_id,
+#                 body=permission,
+#                 fields='id',
+#                 sendNotificationEmail=False
+#             ).execute()
+#             print(f"✅ File (ID: {file_id}) shared with {email} as editor.")
+
+#     except Exception as e:
+#         raise Exception(f"Error sharing the file with specific emails: {e}")
+
+def make_sheet_public_editable(file_id: str, credentials_file: str, email_list: List[str], service_account_email: str):
     """
-    Uses the Google Drive API to update the sharing permission of a file so that anyone with the link can edit.
+    - Gives editor access to the service account and all specified emails.
+    - Makes the file viewable by anyone with the link.
     """
     try:
         creds = service_account.Credentials.from_service_account_file(
@@ -154,18 +175,75 @@ def make_sheet_public_editable(file_id: str, credentials_file: str):
             scopes=["https://www.googleapis.com/auth/drive"]
         )
         drive_service = build('drive', 'v3', credentials=creds)
-        permission = {
-            'type': 'anyone',
-            'role': 'writer'
+
+        # Grant editor access to the service account
+        permission_sa = {
+            'type': 'user',
+            'role': 'writer',
+            'emailAddress': service_account_email
         }
         drive_service.permissions().create(
             fileId=file_id,
-            body=permission,
+            body=permission_sa,
+            fields='id',
+            sendNotificationEmail=False
+        ).execute()
+        print(f"✅ Editor access granted to service account: {service_account_email}")
+
+        # Grant editor access to all other emails
+        for email in email_list:
+            if email != service_account_email:
+                permission_user = {
+                    'type': 'user',
+                    'role': 'writer',
+                    'emailAddress': email
+                }
+                drive_service.permissions().create(
+                    fileId=file_id,
+                    body=permission_user,
+                    fields='id',
+                    sendNotificationEmail=False
+                ).execute()
+                print(f"✅ Editor access granted to: {email}")
+
+        # Make the file viewable by anyone with the link
+        permission_public = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
+        drive_service.permissions().create(
+            fileId=file_id,
+            body=permission_public,
             fields='id'
         ).execute()
-        print(f"File (ID: {file_id}) is now set to 'Anyone with the link can edit'.")
+        print("🌐 Public viewer access enabled (anyone with the link can view).")
+
     except Exception as e:
-        raise Exception(f"Error making the file public and editable: {e}")
+        raise Exception(f"❌ Error setting permissions: {e}")
+
+
+# def make_sheet_public_editable(file_id: str, credentials_file: str):
+#     """
+#     Uses the Google Drive API to update the sharing permission of a file so that anyone with the link can edit.
+#     """
+#     try:
+#         creds = service_account.Credentials.from_service_account_file(
+#             credentials_file,
+#             scopes=["https://www.googleapis.com/auth/drive"]
+#         )
+#         drive_service = build('drive', 'v3', credentials=creds)
+#         permission = {
+#             'type': 'anyone',
+#             'role': 'writer'
+#         }
+#         drive_service.permissions().create(
+#             fileId=file_id,
+#             body=permission,
+#             fields='id'
+#         ).execute()
+#         print(f"File (ID: {file_id}) is now set to 'Anyone with the link can edit'.")
+#     except Exception as e:
+#         raise Exception(f"Error making the file public and editable: {e}")
 
 def append_to_google_doc(doc_id, text):
     print('append_to_google_doc')
@@ -183,13 +261,15 @@ def append_to_google_doc(doc_id, text):
 def authenticate_gspread(credentials_file):
     print('authenticate_gspread')
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
+    # creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
+    creds = service_account.Credentials.from_service_account_file(credentials_file, scopes=scope)
     return gspread.authorize(creds)
 
 def get_google_sheet_data(gc, sheet_url):
     print('get_google_sheet_data')
     sheet = gc.open_by_url(sheet_url).sheet1
-    df = get_as_dataframe(sheet, evaluate_formulas=True, skip_blank_rows=True)
+    # df = get_as_dataframe(sheet, evaluate_formulas=True, skip_blank_rows=True)
+    df = pd.DataFrame(sheet.get_all_records())
     return df.dropna(how="all")
 
 def scrape_product_info(product_url):
@@ -214,6 +294,7 @@ def scrape_product_info(product_url):
     except Exception as e:
         print(f"Error scraping product info: {e}")
         return None
+
 
 def share_sheet_with_email(file_id, email, credentials_file):
     print("file_id", file_id)
@@ -278,21 +359,23 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     matches = response.choices[0].message.content.strip().split(", ")
     return [match for match in matches if match]
 
-def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, scrap_url: str, product_url: str) -> str:
+def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, scrap_url: str, product_url: str, emails:List) -> str:
     """
     Creates a new Google Sheet, updates its sharing permissions, performs matching between two sheets,
     and outputs the data to the new spreadsheet.
     """
     # Authorize gspread and create a new spreadsheet
     gc = authenticate_gspread(credentials_file)
-    new_sheet_title = "Output Sheet"
+    new_sheet_title = "Optimized Backend Attributes"
     new_spreadsheet = gc.create(new_sheet_title)
+
+    
     new_sheet_url = new_spreadsheet.url
     file_id = new_spreadsheet.id
     print(f"Created new spreadsheet with title '{new_sheet_title}' and ID: {file_id}")
     
     # Update sharing permissions so anyone with the link can edit
-    make_sheet_public_editable(file_id, credentials_file)
+    make_sheet_public_editable(file_id, credentials_file,emails, service_account_email)
     
     # Get data from the provided Amazon and Scrap sheets
     amazon_df = get_google_sheet_data(gc, amazon_url)
