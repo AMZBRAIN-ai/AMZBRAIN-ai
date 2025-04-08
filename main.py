@@ -116,19 +116,19 @@ async def trigger_functions(data: RequestData):
             credentials_file, data.amazon_url, data.scrape_url, data.product_url, data.emails
         )
     
-        doc_title = "Amazon OpenFields"
-        doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
-        make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email)
-        print("Generating Google Docs:")
-        await generate_amazon_backend_keywords(data.product_url, doc_id)
-        await generate_amazon_bullets(data.product_url, doc_id)
-        await generate_amazon_description(data.product_url, doc_id)
-        await generate_amazon_title(data.product_url, doc_id)
+        # doc_title = "Amazon OpenFields"
+        # doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
+        # make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email)
+        # print("Generating Google Docs:")
+        # await generate_amazon_backend_keywords(data.product_url, doc_id)
+        # await generate_amazon_bullets(data.product_url, doc_id)
+        # await generate_amazon_description(data.product_url, doc_id)
+        # await generate_amazon_title(data.product_url, doc_id)
         print("Results Generated")
         return {
             "status": "success", 
-            "google_sheets":message,
-            "google_docs": doc_url
+            "google_sheets":message
+            # "google_docs": doc_url
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
