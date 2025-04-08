@@ -16,7 +16,7 @@ from pydantic import BaseModel
 import asyncio
 import json
 import re
-from typing import List
+import time
 
 app = FastAPI()
 
@@ -270,29 +270,55 @@ def get_google_sheet_data(gc, sheet_url):
     df = pd.DataFrame(sheet.get_all_records())
     return df.dropna(how="all")
 
+# def scrape_product_info(product_url):
+#     print('scrape_product_info')
+#     """Extracts ALL text from the product page, removing excessive whitespace."""
+#     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    
+#     try:
+#         print("here 1")
+#         response = requests.get(product_url, headers=headers)
+#         print("response")
+#         print(response.status_code)
+#         if response.status_code != 200:
+#             print(f"Failed to fetch product page: {response.status_code}")
+#             return None
+#         print("here 2")
+        
+#         soup = BeautifulSoup(response.text, "html.parser")
+#         all_text = soup.get_text(separator=" ").lower()
+#         cleaned_text = re.sub(r'\s+', ' ', all_text).strip()
+#         return cleaned_text
+#     except Exception as e:
+#         print(f"Error scraping product info: {e}")
+#         return None
+
 def scrape_product_info(product_url):
     print('scrape_product_info')
     """Extracts ALL text from the product page, removing excessive whitespace."""
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     
-    try:
-        print("here 1")
-        response = requests.get(product_url, headers=headers)
-        print("response")
-        print(response.status_code)
-        if response.status_code != 200:
-            print(f"Failed to fetch product page: {response.status_code}")
+    # Retry loop to keep trying until status code 200 is received
+    while True:
+        try:
+            print("here 1")
+            response = requests.get(product_url, headers=headers)
+            print("response")
+            print(response.status_code)
+            
+            if response.status_code == 200:
+                print("here 2")
+                soup = BeautifulSoup(response.text, "html.parser")
+                all_text = soup.get_text(separator=" ").lower()
+                cleaned_text = re.sub(r'\s+', ' ', all_text).strip()
+                return cleaned_text
+            else:
+                print(f"Failed to fetch product page: {response.status_code}. Retrying...")
+                time.sleep(2)  # Wait for 2 seconds before retrying
+            
+        except Exception as e:
+            print(f"Error scraping product info: {e}")
             return None
-        print("here 2")
-        
-        soup = BeautifulSoup(response.text, "html.parser")
-        all_text = soup.get_text(separator=" ").lower()
-        cleaned_text = re.sub(r'\s+', ' ', all_text).strip()
-        return cleaned_text
-    except Exception as e:
-        print(f"Error scraping product info: {e}")
-        return None
-
 
 def share_sheet_with_email(file_id, email, credentials_file):
     print("file_id", file_id)
