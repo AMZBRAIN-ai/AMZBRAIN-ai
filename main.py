@@ -347,7 +347,7 @@ def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, sc
     if scraped_text is None:
         return "Scraping failed."
     
-    # Find matching fields between the two sheets
+    # Find matching fields between the two sheetsnn
     print('before amazon_fields')
     amazon_fields = set(amazon_df.iloc[1:, 0].dropna())
     scrap_fields = set(scrap_df.iloc[1:, 0].dropna())
