@@ -119,12 +119,12 @@ async def trigger_functions(data: RequestData):
         doc_title = "Amazon OpenFields"
         doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
         make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email)
-        print("Generating Google Docs:")
-        await generate_amazon_backend_keywords(data.product_url, doc_id)
-        await generate_amazon_bullets(data.product_url, doc_id)
-        await generate_amazon_description(data.product_url, doc_id)
-        await generate_amazon_title(data.product_url, doc_id)
-        print("Results Generated")
+        # print("Generating Google Docs:")
+        # await generate_amazon_backend_keywords(data.product_url, doc_id)
+        # await generate_amazon_bullets(data.product_url, doc_id)
+        # await generate_amazon_description(data.product_url, doc_id)
+        # await generate_amazon_title(data.product_url, doc_id)
+        # print("Results Generated")
         return {
             "status": "success", 
             "google_sheets":message,
@@ -132,37 +132,6 @@ async def trigger_functions(data: RequestData):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
-
-
-
-
-# def make_sheet_public_editable(file_id: str, email_list: list, credentials_file: str):
-#     """
-#     Grants edit access to a list of specific email addresses using the Google Drive API.
-#     """
-#     try:
-#         creds = service_account.Credentials.from_service_account_file(
-#             credentials_file,
-#             scopes=["https://www.googleapis.com/auth/drive"]
-#         )
-#         drive_service = build('drive', 'v3', credentials=creds)
-
-#         for email in email_list:
-#             permission = {
-#                 'type': 'user',
-#                 'role': 'writer',
-#                 'emailAddress': email
-#             }
-#             drive_service.permissions().create(
-#                 fileId=file_id,
-#                 body=permission,
-#                 fields='id',
-#                 sendNotificationEmail=False
-#             ).execute()
-#             print(f"✅ File (ID: {file_id}) shared with {email} as editor.")
-
-#     except Exception as e:
-#         raise Exception(f"Error sharing the file with specific emails: {e}")
 
 def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, service_account_email: str):
     """
@@ -219,30 +188,6 @@ def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, 
     except Exception as e:
         raise Exception(f"❌ Error setting permissions: {e}")
 
-
-# def make_sheet_public_editable(file_id: str, credentials_file: str):
-#     """
-#     Uses the Google Drive API to update the sharing permission of a file so that anyone with the link can edit.
-#     """
-#     try:
-#         creds = service_account.Credentials.from_service_account_file(
-#             credentials_file,
-#             scopes=["https://www.googleapis.com/auth/drive"]
-#         )
-#         drive_service = build('drive', 'v3', credentials=creds)
-#         permission = {
-#             'type': 'anyone',
-#             'role': 'writer'
-#         }
-#         drive_service.permissions().create(
-#             fileId=file_id,
-#             body=permission,
-#             fields='id'
-#         ).execute()
-#         print(f"File (ID: {file_id}) is now set to 'Anyone with the link can edit'.")
-#     except Exception as e:
-#         raise Exception(f"Error making the file public and editable: {e}")
-
 def append_to_google_doc(doc_id, text):
     print('append_to_google_doc')
     """Append text to a Google Doc."""
@@ -269,29 +214,6 @@ def get_google_sheet_data(gc, sheet_url):
     # df = get_as_dataframe(sheet, evaluate_formulas=True, skip_blank_rows=True)
     df = pd.DataFrame(sheet.get_all_records())
     return df.dropna(how="all")
-
-# def scrape_product_info(product_url):
-#     print('scrape_product_info')
-#     """Extracts ALL text from the product page, removing excessive whitespace."""
-#     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-    
-#     try:
-#         print("here 1")
-#         response = requests.get(product_url, headers=headers)
-#         print("response")
-#         print(response.status_code)
-#         if response.status_code != 200:
-#             print(f"Failed to fetch product page: {response.status_code}")
-#             return None
-#         print("here 2")
-        
-#         soup = BeautifulSoup(response.text, "html.parser")
-#         all_text = soup.get_text(separator=" ").lower()
-#         cleaned_text = re.sub(r'\s+', ' ', all_text).strip()
-#         return cleaned_text
-#     except Exception as e:
-#         print(f"Error scraping product info: {e}")
-#         return None
 
 def scrape_product_info(product_url):
     print('scrape_product_info')
@@ -320,39 +242,9 @@ def scrape_product_info(product_url):
             print(f"Error scraping product info: {e}")
             return None
 
-def share_sheet_with_email(file_id, email, credentials_file):
-    print("file_id", file_id)
-    print("email", email)
-    print("credentials_file", credentials_file)
-    """
-    Share the file with a specific email (e.g. your service account) as editor.
-    """
-    creds = service_account.Credentials.from_service_account_file(
-        credentials_file,
-        scopes=['https://www.googleapis.com/auth/drive']
-    )
-    print("creds", creds)
-
-    drive_service = build('drive', 'v3', credentials=creds)
-    print("drive_service", drive_service)
-    
-    permission = {
-        'type': 'user',
-        'role': 'writer',
-        'emailAddress': email
-    }
-    drive_service.permissions().create(
-        fileId=file_id,
-        body=permission,
-        fields='id',
-        sendNotificationEmail=False  # Avoid sending notification emails
-    ).execute()
-    print(f"Sheet is now shared with {email} as editor.")
-
 def get_top_matches(product_info, field_name, field_value, possible_values):
-    # print('get_top_matches')
-    
     """Uses OpenAI to find the best matches for a given field from the product description."""
+
     ai_prompt = f"""
     You are an AI specializing in product attribute matching.
 
@@ -373,15 +265,58 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     - From the possible options, pick up to **5 best matches** that are most relevant.
     - Output only the matches as a **comma-separated list** with no extra text.
     - If no good matches exist, return an **empty string**.
+    -DONT WRITE "UNSTRUCTURED FIELDS" OR "EMPTY STRING" JUST LEAVE IT EMPTY!!!
     """
 
     response = client.chat.completions.create(
         model="gpt-4-turbo",
         messages=[{"role": "user", "content": ai_prompt}]
     )
+
+    content = response.choices[0].message.content.strip()
+    if not content or content.lower() in ["empty string", "structured field", "none", "n/a"]:
+        return [""] * 5
+
+    matches = [m.strip() for m in content.split(",") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a"]]
+    return matches[:5] + [""] * (5 - len(matches))
+
+# def get_top_matches(product_info, field_name, field_value, possible_values):
+#     # print('get_top_matches')
     
-    matches = response.choices[0].message.content.strip().split(", ")
-    return [match for match in matches if match]
+#     """Uses OpenAI to find the best matches for a given field from the product description."""
+#     ai_prompt = f"""
+#     You are an AI specializing in product attribute matching.
+
+#     ### Product Information:
+#     {product_info}
+
+#     ### Field Name:
+#     {field_name}
+
+#     ### Field Value (Reference from Amazon Sheet):
+#     {field_value}
+
+#     ### Possible Options (from the Google Sheet):
+#     {', '.join(possible_values)}
+
+#     ### Instructions:
+#     - Compare the field value against the product description.
+#     - From the possible options, pick up to **5 best matches** that are most relevant.
+#     - Output only the matches as a **comma-separated list** with no extra text.
+#     - If no good matches exist, return an **empty string**.
+#     """
+
+#     response = client.chat.completions.create(
+#         model="gpt-4-turbo",
+#         messages=[{"role": "user", "content": ai_prompt}]
+#     )
+    
+    
+#     content = response.choices[0].message.content.strip()
+#     if not content:  
+#         return [""] * 5
+#     matches = content.split(", ")
+#     return matches[:5] + [""] * (5 - len(matches))
 
 def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, scrap_url: str, product_url: str, emails:str) -> str:
     """
@@ -403,8 +338,12 @@ def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, sc
     
     # Get data from the provided Amazon and Scrap sheets
     amazon_df = get_google_sheet_data(gc, amazon_url)
+    print("amazon_df",amazon_df)
     scrap_df = get_google_sheet_data(gc, scrap_url)
+    print("scrap_df",scrap_df)
     scraped_text = scrape_product_info(product_url)
+    print("scraped_text",scraped_text)
+
     if scraped_text is None:
         return "Scraping failed."
     
