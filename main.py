@@ -262,7 +262,54 @@ def scrape_product_info(product_url):
 def get_top_matches(product_info, field_name, field_value, possible_values):
     """Uses OpenAI to find the best matches for a given field from the product description, and justifies them."""  
     ai_prompt = f"""
-    You are an AI specializing in product attribute extraction and intelligent mapping from unstructured product data.
+
+    Role: You are an advanced product attribute matching system designed to intelligently map product information to Amazon's structured fields.
+    Task: Analyze product information and select the most appropriate values for each structured field while following Amazon's guidelines.
+    Input:
+    1. Product information from product URLs, descriptions, and specifications
+    2. Structured field names from Scrape Doc
+    3. Valid values for each field from Amazon Doc
+    Guidelines for Matching Structured Fields:
+    1. For fields where Amazon's valid values match product attributes:
+    • Select up to 5 most relevant valid values
+    • Prioritize values that appear explicitly in product information
+    • Rank selections by relevance and importance to the product
+    2. For fields where product attributes don't match Amazon's valid values:
+    • If the field is relevant to the product but no valid values match:
+        - Extract actual product-specific attributes from the URL/ Product information
+        - Use these custom values instead of leaving fields empty
+    • Only use this approach when the field is clearly relevant to the product category
+    3. For structured fields unrelated to the product category:
+    • Leave these fields completely empty
+    • Do not attempt to fill unrelated fields (e.g., "League Name" for a shampoo)
+    Matching Techniques:
+    - Perform case-insensitive matching across all product information
+    - Match word stems, morphological variants, and semantic equivalents  (e.g. “engineer”  “Engineering Skills”, “science”  “Scientific Thinking”, “constructive”  “Construction Skills”, “STEM”  “STEM”).
+    - Recognize synonyms, plurals, tense variations, and common abbreviations
+    - Consider grammatical variations (e.g., participles, gerunds, -ing forms)
+    - Identify terms within compound words and phrases
+    Handling Implied Attributes:
+    - If an attribute is strongly implied by product context, include it
+    - Look for contextual clues that suggest specific attributes
+    - Consider product category norms when selecting attributes
+    - Recognize industry-standard features that may be implied
+    Output Format:
+    - For each structured field, provide up to 5 comma-separated values
+    - List values in order of relevance and confidence
+    - Do not include explanations, justifications, or additional text
+    - Return an empty string ("") for irrelevant fields or fields with no matches
+    - Never return placeholder text like "UNSTRUCTURED FIELDS" or "EMPTY STRING"
+    Quality Control:
+    - Do not hallucinate or fabricate attributes not supported by product data
+    - Verify each attribute against product information before selection
+    - For ingredient-based fields, ensure accuracy by cross-referencing product description
+    - When in doubt about a field's relevance, prioritize accuracy over completeness
+    Special Cases:
+    - For ingredient lists, extract complete information from product URLs if available
+    - For technical specifications, match exact values when possible
+    - For material composition, identify primary and secondary materials accurately
+    - For specialized industry terms, match to the closest appropriate valid value
+
 
     ### Product Information:
     {product_info}
@@ -276,26 +323,7 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     ### Possible Options (from the Google Sheet):
     {', '.join(possible_values)}
 
-    ### Instructions:
 
-    
-1. Carefully analyze all available product information—titles, subtitles, descriptions, URLs, and contextual clues.
-
-2. Use intelligent matching techniques including:
-
-    - Case-insensitive substring and stem-based matching.
-    - Match on roots and morphological variants (e.g. “engineer” ↔ “Engineering Skills”, “science” ↔ “Scientific Thinking”, “constructive” ↔ “Construction Skills”, “STEM” ↔ “STEM”).
-    - Handle plurals, tense changes, and common abbreviations.
-    - Recognize common abbreviations and implied educational content.
-
-    3. If an option is **not explicitly stated**, but is **strongly implied by the product’s use case, educational context, or learning outcomes**, include it.
-    4. Return a **comma-separated list of up to 5 best-matching values**, ranked by relevance and inference.
-    7. Do not hallucinate or fabricate attributes. Only return values that are supported or clearly inferred from the product context.
-    4. Output only the matches as a comma‑separated list, with no extra text.
-    5. If there are no valid matches, return an empty string (`""`)—do not write `"UNSTRUCTURED FIELDS"` or `"EMPTY STRING"`.
-    keep in mind if a present participles or gerunds or forms come from adding -ing to the base verb (work → working) are same
-    When extracting product information (e.g., for a listing or catalog), if a field like "ingredients" is required and the provided source (such as Amazon) contains inaccurate or mismatched information, the tool should attempt to identify and insert the real ingredients from the product's actual data if available.
-    If accurate information is not available, the tool should skip the field for manual review instead of copying incorrect data.
     """
 
     response = client.chat.completions.create(
@@ -309,6 +337,25 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
 
     matches = [m.strip() for m in content.split(",") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a"]]
     return matches[:5] + [""] * (5 - len(matches))
+
+
+    # You are an AI specializing in product attribute extraction and intelligent mapping from unstructured product data.
+    # ### Instructions:
+    # 1. Carefully analyze all available product information—titles, subtitles, descriptions, URLs, and contextual clues.
+    # 2. Use intelligent matching techniques including:
+    # - Case-insensitive substring and stem-based matching.
+    # - Match on roots and morphological variants (e.g. “engineer” ↔ “Engineering Skills”, “science” ↔ “Scientific Thinking”, “constructive” ↔ “Construction Skills”, “STEM” ↔ “STEM”).
+    # - Handle plurals, tense changes, and common abbreviations.
+    # - Recognize common abbreviations and implied educational content.
+
+    # 3. If an option is **not explicitly stated**, but is **strongly implied by the product’s use case, educational context, or learning outcomes**, include it.
+    # 4. Return a **comma-separated list of up to 5 best-matching values**, ranked by relevance and inference.
+    # 7. Do not hallucinate or fabricate attributes. Only return values that are supported or clearly inferred from the product context.
+    # 4. Output only the matches as a comma‑separated list, with no extra text.
+    # 5. If there are no valid matches, return an empty string (`""`)—do not write `"UNSTRUCTURED FIELDS"` or `"EMPTY STRING"`.
+    # keep in mind if a present participles or gerunds or forms come from adding -ing to the base verb (work → working) are same
+    # When extracting product information (e.g., for a listing or catalog), if a field like "ingredients" is required and the provided source (such as Amazon) contains inaccurate or mismatched information, the tool should attempt to identify and insert the real ingredients from the product's actual data if available.
+    # If accurate information is not available, the tool should skip the field for manual review instead of copying incorrect data.
 
 # def get_top_matches(product_info, field_name, field_value, possible_values):
 #     # print('get_top_matches')
