@@ -260,10 +260,9 @@ def scrape_product_info(product_url):
             return None
 
 def get_top_matches(product_info, field_name, field_value, possible_values):
-    """Uses OpenAI to find the best matches for a given field from the product description."""
-
+    """Uses OpenAI to find the best matches for a given field from the product description, and justifies them."""  
     ai_prompt = f"""
-    You are an AI specializing in product attribute matching.
+    You are an AI specializing in product attribute extraction and intelligent mapping from unstructured product data.
 
     ### Product Information:
     {product_info}
@@ -279,20 +278,24 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
 
     ### Instructions:
 
-    1. Inspect **all** of the product information—especially any URLs or URL segments, titles, and descriptions.
+    
+1. Carefully analyze all available product information—titles, subtitles, descriptions, URLs, and contextual clues.
 
-    2. Use **case‑insensitive substring** and **stem‑based matching**:
+2. Use intelligent matching techniques including:
 
+    - Case-insensitive substring and stem-based matching.
     - Match on roots and morphological variants (e.g. “engineer” ↔ “Engineering Skills”, “science” ↔ “Scientific Thinking”, “constructive” ↔ “Construction Skills”, “STEM” ↔ “STEM”).
-
     - Handle plurals, tense changes, and common abbreviations.
+    - Recognize common abbreviations and implied educational content.
 
-    3. From the possible options, pick up to **5 best matches** that appear anywhere in the product info.
-
-    4. **Output only** the matches as a **comma‑separated list**, with **no extra text**.
-
-    5. If there are **no valid matches**, return an **empty string** (`""`)—do **not** write `"UNSTRUCTURED FIELDS"` or `"EMPTY STRING"`.
+    3. If an option is **not explicitly stated**, but is **strongly implied by the product’s use case, educational context, or learning outcomes**, include it.
+    4. Return a **comma-separated list of up to 5 best-matching values**, ranked by relevance and inference.
+    7. Do not hallucinate or fabricate attributes. Only return values that are supported or clearly inferred from the product context.
+    4. Output only the matches as a comma‑separated list, with no extra text.
+    5. If there are no valid matches, return an empty string (`""`)—do not write `"UNSTRUCTURED FIELDS"` or `"EMPTY STRING"`.
     keep in mind if a present participles or gerunds or forms come from adding -ing to the base verb (work → working) are same
+    When extracting product information (e.g., for a listing or catalog), if a field like "ingredients" is required and the provided source (such as Amazon) contains inaccurate or mismatched information, the tool should attempt to identify and insert the real ingredients from the product's actual data if available.
+    If accurate information is not available, the tool should skip the field for manual review instead of copying incorrect data.
     """
 
     response = client.chat.completions.create(
