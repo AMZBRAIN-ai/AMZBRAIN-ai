@@ -261,11 +261,13 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     {', '.join(possible_values)}
 
     ### Instructions:
-    - Compare the field value against the product description.
+    - Compare the field value against the product information.
+    - Use **fuzzy matching**: treat morphological variants, tense changes, plural/singular forms, and close synonyms/abbreviations as valid matches  
+    (e.g. “engineering” ↔ “engineer”, “scientific thinking” ↔ “science”, “constructive thinking” ↔ “construction”, “STEM”).
     - From the possible options, pick up to **5 best matches** that are most relevant.
-    - Output only the matches as a **comma-separated list** with no extra text.
-    - If no good matches exist, return an **empty string**.
-    -DONT WRITE "UNSTRUCTURED FIELDS" OR "EMPTY STRING" JUST LEAVE IT EMPTY!!!
+    - **Output only** the matches as a **comma-separated list**, with **no extra text**.
+    - If no good matches exist, return an **empty string** (i.e. just `""`).
+    - **DONT WRITE** `"UNSTRUCTURED FIELDS"` **OR** `"EMPTY STRING"`—**JUST LEAVE IT EMPTY!!!**
     """
 
     response = client.chat.completions.create(
@@ -533,7 +535,7 @@ async def generate_amazon_backend_keywords(product_url, doc_id):
         if not product_url:
             return "Failed to generate backend keywords: No product data found"
         response = await asyncio.to_thread(client.chat.completions.create,
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[{"role": "user", "content": keywords_prompt}]
         )
         
