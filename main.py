@@ -536,6 +536,7 @@ async def generate_amazon_backend_keywords(product_url, doc_id):
     Use alternative terms and phrasing to expand search reach.
     Maintain high relevance without repetition or unnecessary words.
     **Product Information:**
+    the product url can be of amazon links or different links, you have to study them 
     {product_url}
     """
 
