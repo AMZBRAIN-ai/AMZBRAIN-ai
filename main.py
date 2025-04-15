@@ -262,13 +262,20 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     {', '.join(possible_values)}
 
     ### Instructions:
-    - Compare the field value against the product information.
-    - Use **fuzzy matching**: treat morphological variants, tense changes, plural/singular forms, and close synonyms/abbreviations as valid matches  
-    (e.g. “engineering” ↔ “engineer”, “scientific thinking” ↔ “science”, “constructive thinking” ↔ “construction”, “STEM”).
-    - From the possible options, pick up to **5 best matches** that are most relevant.
-    - **Output only** the matches as a **comma-separated list**, with **no extra text**.
-    - If no good matches exist, return an **empty string** (i.e. just `""`).
-    - **DONT WRITE** `"UNSTRUCTURED FIELDS"` **OR** `"EMPTY STRING"`—**JUST LEAVE IT EMPTY!!!**
+
+    1. Inspect **all** of the product information—especially any URLs or URL segments, titles, and descriptions.
+
+    2. Use **case‑insensitive substring** and **stem‑based matching**:
+
+    - Match on roots and morphological variants (e.g. “engineer” ↔ “Engineering Skills”, “science” ↔ “Scientific Thinking”, “constructive” ↔ “Construction Skills”, “STEM” ↔ “STEM”).
+
+    - Handle plurals, tense changes, and common abbreviations.
+
+    3. From the possible options, pick up to **5 best matches** that appear anywhere in the product info.
+
+    4. **Output only** the matches as a **comma‑separated list**, with **no extra text**.
+
+    5. If there are **no valid matches**, return an **empty string** (`""`)—do **not** write `"UNSTRUCTURED FIELDS"` or `"EMPTY STRING"`.
     """
 
     response = client.chat.completions.create(
