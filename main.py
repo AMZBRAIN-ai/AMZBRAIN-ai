@@ -93,13 +93,7 @@ async def bullets(data:RequestData):
 @app.post("/keywords")
 async def keywords(data:RequestData):
     try:
-        message = match_and_create_new_google_sheet(
-            credentials_file, data.amazon_url, data.scrape_url, data.product_url, data.emails
-        )
-        doc_title = "Amazon OpenFields"
-        doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
-        make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email)
-        keywords = await generate_amazon_backend_keywords(data.product_url, doc_id)
+        keywords = await generate_amazon_backend_keywords(data.product_url)
         return {"status": "success", "message": "keywords generated successfully", "keywords":keywords}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering keywords: {e}")
@@ -111,6 +105,22 @@ async def structuredfields(data:RequestData):
         return {"status": "success", "message": "google sheet generated successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering structuredfields: {e}")
+
+
+@app.get("/sheets")
+@app.post("/sheets")
+async def sheets_functions(data: RequestData):
+    try:
+        print("Generating Google Sheet:")
+        message = match_and_create_new_google_sheet(
+            credentials_file, data.amazon_url, data.scrape_url, data.product_url, data.emails
+        )
+        return {
+            "status": "success", 
+            "google_sheets":message,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error triggering /sheets: {e}")
 
 
 @app.get("/trigger")
@@ -282,6 +292,7 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     4. **Output only** the matches as a **comma‑separated list**, with **no extra text**.
 
     5. If there are **no valid matches**, return an **empty string** (`""`)—do **not** write `"UNSTRUCTURED FIELDS"` or `"EMPTY STRING"`.
+    keep in mind if a present participles or gerunds or forms come from adding -ing to the base verb (work → working) are same
     """
 
     response = client.chat.completions.create(
