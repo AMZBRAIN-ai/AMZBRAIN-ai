@@ -93,7 +93,13 @@ async def bullets(data:RequestData):
 @app.post("/keywords")
 async def keywords(data:RequestData):
     try:
-        keywords = await generate_amazon_backend_keywords(data.product_url)
+        message = match_and_create_new_google_sheet(
+            credentials_file, data.amazon_url, data.scrape_url, data.product_url, data.emails
+        )
+        doc_title = "Amazon OpenFields"
+        doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
+        make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email)
+        keywords = await generate_amazon_backend_keywords(data.product_url, doc_id)
         return {"status": "success", "message": "keywords generated successfully", "keywords":keywords}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering keywords: {e}")
@@ -511,11 +517,12 @@ async def generate_amazon_bullets(product_url, doc_id):
         raise HTTPException(status_code=500, detail=f"Error generating bullets: {str(e)}")
 
 async def generate_amazon_backend_keywords(product_url, doc_id):
-    # doc_title = "Amazon Title Output"
-    # doc_id, doc_url = create_new_google_doc(doc_title, credentials_file)
-    # make_sheet_public_editable(doc_id, credentials_file)
-
     keywords_prompt = f"""
+    
+    You are an Amazon SEO expert.
+    🚫 Do NOT write any explanations, introductions, or notes.
+    ✅ ONLY return the backend keywords string (500 characters max, no more, no less), space-separated.
+
     please make sure to generate a total of 500 keywords, dont write more or less
     Amazon SEO Backend Keywords Prompt (500 Characters, No Repetition, High Conversion, Feature-Focused)
     Act as an Amazon SEO expert. Generate a backend keyword string of exactly 500 characters to maximize product discoverability while following Amazon’s guidelines.
@@ -538,6 +545,7 @@ async def generate_amazon_backend_keywords(product_url, doc_id):
     **Product Information:**
     the product url can be of amazon links or different links, you have to study them 
     {product_url}
+    ⚠️ FINAL OUTPUT MUST ONLY BE THE KEYWORDS, SPACE-SEPARATED. NO INTRO TEXT, NO BULLETS, NO HEADERS.
     """
 
     try:
