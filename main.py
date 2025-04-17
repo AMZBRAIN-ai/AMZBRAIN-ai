@@ -271,7 +271,7 @@ def scrape_product_info(product_url):
         except Exception as e:
             print(f"Error scraping product info: {e}")
             return None
-
+# print('hello')
 # def get_top_matches(product_info, field_name, field_value, possible_values):
 #     """Uses OpenAI to find the best matches for a given field from the product description, and justifies them."""  
 #     ai_prompt = f"""
