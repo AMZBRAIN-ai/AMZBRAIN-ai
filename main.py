@@ -132,7 +132,7 @@ async def trigger_functions(data: RequestData):
     try:
         # print("Generating Google Sheet:")
         print("Generating Google Sheet:")
-        message = await match_and_create_new_google_sheet(
+        message = match_and_create_new_google_sheet(
             credentials_file, data.amazon_url, data.scrape_url, data.product_url, data.emails
         )
     
