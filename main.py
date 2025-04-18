@@ -289,6 +289,10 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     6. If no valid matches are found, return an empty string (“”).
     7. Avoid hallucination or fabricating attributes. Only return matches that can be **inferred** from the product’s context.
     8. Ignore any terms like "structured field", "empty string", "none", or "n/a".
+    9. Return exactly one best‑matching value (a single word) from the possible options, ranked by relevance.
+    10. If no valid match exists, return exactly an empty string: "".
+    11. Do not include any justifications, explanations, or additional text.
+
     
     ### Product Information:
     {product_info}
