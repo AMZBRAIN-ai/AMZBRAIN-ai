@@ -4,9 +4,15 @@ import re
 async def scrape_amazon_with_playwright(url):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+        print("browser")
+        print(browser)
         page = await browser.new_page()
+        print("page")
+        print(page)
         await page.goto(url, timeout=60000)
         text = await page.inner_text('body')
+        print("text")
+        print(text)
         await browser.close()
         return re.sub(r'\s+', ' ', text).strip()
 

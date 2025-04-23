@@ -1,3 +1,13 @@
+
+# if not related to sports leave it empty
+# other use cases mentioned 3
+# new spreadsheet each time
+# use keyword url
+# save people's emails and dates in spreadhsehet
+# remove test workflow move to production
+# check threshold
+
+
 import gspread
 import pandas as pd
 import requests
@@ -158,6 +168,37 @@ async def trigger_functions(data: RequestData):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
 
+STOPWORDS = {"type", "attribute", "field", "value", "description", "free", "name"}
+BLOCK_PREFIXES = {"variation", "is", "item", "minimum", "maximum", "manufacturer"}
+
+def preprocess(field: str) -> str:
+    return " ".join([w.lower() for w in field.split() if w.lower() not in STOPWORDS])
+
+def smart_fuzzy_match(scrape_field: str, amazon_fields: list[str], threshold: int = 70):
+    clean_scrape = preprocess(scrape_field)
+    valid_candidates = []
+    for af in amazon_fields:
+        clean_af = preprocess(af)
+        if af.lower().split()[0] in BLOCK_PREFIXES:
+            continue
+        if clean_scrape in clean_af and clean_scrape != clean_af:
+            if abs(len(scrape_field.split()) - len(af.split())) >= 1:
+                continue
+        semantic_conflicts = [
+            ("expiration type", "expirable"),
+            ("theme", "variation"),
+            ("manufacturer", "age"),
+        ]
+        if any(a in clean_scrape and b in clean_af or b in clean_scrape and a in clean_af for a, b in semantic_conflicts):
+            continue
+        valid_candidates.append(af)
+    if not valid_candidates:
+        return None, 0
+    match = process.extractOne(scrape_field, valid_candidates, scorer=fuzz.token_set_ratio)
+    if match and match[1] >= threshold:
+        return match[0], match[1]
+    return None, 0
+
 def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, service_account_email: str, folder_id: str):
     """
     - Gives editor access to the service account and all specified emails.
@@ -274,6 +315,8 @@ async def scrape_product_info(product_url):
     except Exception as e:
         print(f"Error scraping product info: {e}")
         return None  
+
+
 # def scrape_product_info(product_url):
 #     print('scrape_product_info')
 #     """Extracts ALL text from the product page, removing excessive whitespace."""
@@ -304,22 +347,21 @@ async def scrape_product_info(product_url):
 #             print(f"Error scraping product info: {e}")
 #             return None
 
+def is_specific_field(field_name):
+    return any(keyword in field_name.lower() for keyword in [
+        "age", "year", "date", "number", "qty", "quantity", "count", "amount"
+    ])
+
+def clean_match(m):
+    m = re.sub(r"^\d+\.\s*", "", m) 
+    m = m.lstrip("-").strip()
+    return m.strip('"').strip()
+
 def get_top_matches(product_info, field_name, field_value, possible_values):
     """Uses OpenAI to find the best matches for a given field from the product description, and justifies them."""
     
     ai_prompt = f"""
-    1. Carefully analyze all available product information, including titles, subtitles, descriptions, URLs, and contextual clues.
-    2. Use intelligent matching techniques, including:
-    - Case-insensitive matching for substrings and similar word forms.
-    - Match on roots and morphological variants (e.g. “engineer”: “Engineering Skills”, “science” : “Scientific Thinking”).
-    - Handle plural forms, tense changes, and common abbreviations (e.g. “run”: “running”).
-    - Match similar words or concepts (e.g. “construct” : “construction”).
-    - Recognize implied educational contexts, synonyms, or keywords (e.g. “STEM” and “Science” can be closely related).
-    3. If an option is **not explicitly stated**, but is **strongly implied** by the product’s use case or context, include it.
-    4. Return **up to 5 best-matching values** from the possible options based on relevance, inferred meaning, and fuzzy matching.
-    5. The output should be **a comma-separated list**, only including the best matches, ranked by relevance.
-    6. If no valid matches are found, return an "---"
-    11. Do not include any justifications, explanations, or additional text.
+    You are a precise field-matching assistant. Your task is to return the best matching values for a given product field from a list of known possible options.
 
     ### Product Information:
     {product_info}
@@ -332,6 +374,20 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
 
     ### Possible Options (from the Google Sheet):
     {', '.join(possible_values)}
+
+    ### 🔒 Rules:
+    1. Carefully consider the full product context — titles, descriptions, keywords, use case, etc.
+    2. Match up to 5 values from the Possible Options list that best fit the meaning or implication of the field value and product info.
+    3. Only choose values that exist in the Possible Options list.
+    4. Never include values like "structured field", "empty string", "none", "n/a", or the field name itself.
+    5. If no valid match exists, return: (a single line with just two double quotes) => `""`
+    6. Output format:
+       - Return **one value per line**
+       - Return **only** the matched value (no extra explanation or formatting)
+       - Don’t use bullet points, numbers, or dashes
+    7. if something totally unrelated is mentioned in the {field_name} then you have to ignore it. dont assume values. eg if the product is shampoo but there is mention of league name or sports or team name you have to ignore
+    8. if the product is not related to sports then dont write anything in the League Name or Team Name
+    Begin now:
     """
     
     response = client.chat.completions.create(
@@ -339,19 +395,36 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
         messages=[{"role": "user", "content": ai_prompt}]
     )
 
-    print("product_info",product_info)
+    print("product_info")
     print("field_name",field_name)
     print("field_value",field_value)
     print("possible_values",possible_values)
     
     content = response.choices[0].message.content.strip()
     
-    if not content or content.strip().lower() in ["empty string", "structured field", "none", "n/a"]:
-        return [""] * 5
+    banned = [
+    "empty string", "structured field", "none", "n/a",
+    '""', "plaintext", "formatted field", "data field", field_name.lower()
+    ]
+    matches = []
+    for m in content.split("\n"):
+        clean = clean_match(m)
+        if clean.lower() not in banned and clean not in matches:
+            matches.append(clean)
     
-    matches = [m.strip() for m in content.split(",") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a"]]
+    if is_specific_field(field_name) and matches:
+        return [matches[0]] + [""] * 4
+    else:
+        return matches[:5] + [""] * (5 - len(matches))
     
-    return matches[:5] + [""] * (5 - len(matches))
+    # if not content or content.strip().lower() in ["empty string", "structured field", "none", "n/a"]:
+    #     return [""] * 5
+    
+    # # matches = [m.strip().strip('"') for m in content.split("\n") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a", '""']]
+    # matches = list(dict.fromkeys(  
+    # [m.strip().strip('"') for m in content.split("\n") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a", '""', "plaintext"]]
+    # ))
+    # return matches[:5] + [""] * (5 - len(matches))
 
 def compute_similarity(a: str, b: str) -> float:
     return fuzz.token_set_ratio(a, b) / 100
@@ -405,12 +478,11 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
 
     for field in scrape_fields:
         matched_data["Field Name"].append(field)
-
-        # --- Fuzzy match with Amazon fields to get valid value ---
-        match = process.extractOne(field, amazon_field_names, scorer=fuzz.token_set_ratio)
-        value = amazon_field_map[match[0]] if match and match[1] >= 80 else ""
-
-        # --- AI best matches from scrape options ---
+        # match = process.extractOne(field, amazon_field_names, scorer=fuzz.token_set_ratio)
+        # value = amazon_field_map[match[0]] if match and match[1] >= 80 else ""
+        
+        match_field, score = smart_fuzzy_match(field, amazon_field_names, threshold=80)
+        value = amazon_field_map[match_field] if match_field else ""
         possible_options = scrap_df.loc[scrap_df.iloc[:, 0] == field].iloc[:, 1].dropna().tolist()
         ai_matches = get_top_matches(scraped_text, field, str(value), possible_options)
         ai_matches = ai_matches[:5] + [""] * (5 - len(ai_matches))
@@ -426,23 +498,6 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
     output_sheet = new_spreadsheet.sheet1
     values = [matched_df.columns.tolist()] + matched_df.values.tolist()
     output_sheet.insert_rows(values, row=1)
-
-    # After filling up the values, check the first item (e.g., "Brand Name") and update "Best Matches"
-    first_field = matched_data["Field Name"][0]
-    first_field_value = matched_data["Value"][0]
-
-    if first_field and first_field_value:
-        print(f"Checking {first_field} value: {first_field_value} from the product URL...")
-        
-        # Compare values in 'Value' column for first field with scraped data
-        possible_matches = first_field_value.split(",")  # if the values are in list form (e.g., ["ENGINO", "Inventor"])
-        ai_best_matches = get_top_matches(scraped_text, first_field, first_field_value, possible_matches)
-        
-        # Write the best matches to the corresponding columns
-        for i, match in enumerate(ai_best_matches[:5]):
-            matched_df.at[0, f"AI Best Matched {i + 1}"] = match
-
-    output_sheet.update([matched_df.columns.tolist()] + matched_df.values.tolist())
     print("Data written to new spreadsheet.")
 
     return new_sheet_url
@@ -656,6 +711,18 @@ credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
 
 
+#  1. ONLY return values that exactly exist in the Possible Options list.
+#     2. DO NOT guess or assume values. If a clear, supported match is not found, return just `""`.
+#     3. NEVER return the field name itself, placeholder text (like "structured field", "none", or "n/a"), or irrelevant text like `"plaintext"`.
+#     4. If the field expects a specific value (like number of items, year, date), ONLY return it if it's explicitly mentioned in the product info.
+#     5. DO NOT return general categories (e.g., “STEM Kit”) for specific fields like Model Year, Product Launch Date, or Part Number unless it directly fits.
+#     6. DO NOT return the same value more than once.
+
+#     ### ✅ Output Format:
+#     - One matched value per line (no commas, no bullets)
+#     - Each value must be in its raw text form as shown in the Possible Options list
+#     - Do not return any explanations, headers, formatting, or extra text
+#     - If no valid matches are found, return just: `""` (on a single line)
 
 
 
