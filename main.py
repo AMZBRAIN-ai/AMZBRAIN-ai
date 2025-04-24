@@ -72,54 +72,6 @@ credentials = service_account.Credentials.from_service_account_file(
 )
 docs_service = build("docs", "v1", credentials=credentials)
 
-@app.get("/")
-def read_root():
-    return {"message": "Hello World"}
-
-@app.get("/hi")
-def hi():
-    return {"message": "Hello World"}
-
-@app.post("/title")
-async def title(data:RequestData):
-    try:
-        title = await generate_amazon_title(data.product_url)
-        return {"status": "success", "message": "Title generated successfully", "title":title}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering title: {e}")
-
-@app.post("/description")
-async def description(data:RequestData):
-    try:
-        description = await generate_amazon_description(data.product_url)
-        return {"status": "success", "message": "description generated successfully", "description":description}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering description: {e}")
-
-@app.post("/bullets")
-async def bullets(data:RequestData):
-    try:
-        bullets = await generate_amazon_bullets(data.product_url)
-        return {"status": "success", "message": "bullets generated successfully", "bullets":bullets}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering bullets: {e}")
-
-@app.post("/keywords")
-async def keywords(data:RequestData):
-    try:
-        keywords = await generate_amazon_backend_keywords(data.product_url)
-        return {"status": "success", "message": "keywords generated successfully", "keywords":keywords}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering keywords: {e}")
-
-@app.post("/structuredfields")
-async def structuredfields(data:RequestData):
-    try:
-        # match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
-        return {"status": "success", "message": "google sheet generated successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering structuredfields: {e}")
-
 
 @app.get("/sheets")
 @app.post("/sheets")
@@ -141,14 +93,12 @@ async def sheets_functions(data: RequestData):
 @app.post("/trigger")
 async def trigger_functions(data: RequestData):
     try:
-        # print("Generating Google Sheet:")
         print("Generating Google Sheet:")
         message = match_and_create_new_google_sheet(
             credentials_file, data.amazon_url, data.scrape_url, data.product_url, data.emails
         )
     
         doc_title = "Amazon OpenFields"
-        # docs_folder_id = "1EfuhG0aloXUadQjXsxBztJi0soTAmuep"
         docs_folder_id = "1bP42e7fENju_sef0UACNdZzRKsvhLSGq"
         doc_id, doc_url = create_new_google_doc(doc_title, credentials_file, docs_folder_id)
 
@@ -316,37 +266,6 @@ async def scrape_product_info(product_url):
         print(f"Error scraping product info: {e}")
         return None  
 
-
-# def scrape_product_info(product_url):
-#     print('scrape_product_info')
-#     """Extracts ALL text from the product page, removing excessive whitespace."""
-#     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-    
-#     # Retry loop to keep trying until status code 200 is received
-#     while True:
-#         try:
-#             print("here 1")
-#             response = requests.get(product_url, headers=headers)
-#             print("response")
-#             print(response.status_code)
-            
-#             if response.status_code == 200:
-#                 print("here 2")
-#                 soup = BeautifulSoup(response.text, "html.parser")
-#                 print("soup")
-#                 all_text = soup.get_text(separator=" ").lower()
-#                 print("all_text")
-#                 cleaned_text = re.sub(r'\s+', ' ', all_text).strip()
-#                 print("cleaned_text")
-#                 return cleaned_text
-#             else:
-#                 print(f"Failed to fetch product page: {response.status_code}. Retrying...")
-#                 time.sleep(2)  # Wait for 2 seconds before retrying
-            
-#         except Exception as e:
-#             print(f"Error scraping product info: {e}")
-#             return None
-
 def is_specific_field(field_name):
     return any(keyword in field_name.lower() for keyword in [
         "age", "year", "date", "number", "qty", "quantity", "count", "amount"
@@ -416,15 +335,7 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
         return [matches[0]] + [""] * 4
     else:
         return matches[:5] + [""] * (5 - len(matches))
-    
-    # if not content or content.strip().lower() in ["empty string", "structured field", "none", "n/a"]:
-    #     return [""] * 5
-    
-    # # matches = [m.strip().strip('"') for m in content.split("\n") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a", '""']]
-    # matches = list(dict.fromkeys(  
-    # [m.strip().strip('"') for m in content.split("\n") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a", '""', "plaintext"]]
-    # ))
-    # return matches[:5] + [""] * (5 - len(matches))
+
 
 def compute_similarity(a: str, b: str) -> float:
     return fuzz.token_set_ratio(a, b) / 100
@@ -436,8 +347,6 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
     file_id = new_spreadsheet.id
     new_sheet_url = new_spreadsheet.url
 
-    # folder_id = "1uZ2fYhdztV5GjoNHy8qVb6rLNHWwDEED" parent id
-    # folder_id = "16dRFiBElEm7s2KVPyLTedkw5XJQ-hAiF" #child id
     folder_id = "1BUYZMKdg4d7MTt3aoW6E0Tuk4GTHJlBC"
 
     make_sheet_public_editable(file_id, credentials_file, emails,service_account_email, folder_id)
@@ -453,10 +362,8 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
     if scraped_text is None:
         return "Scraping failed."
 
-    # Collect all field names from scrape doc (including header row 1)
     scrape_fields = list(scrap_df.iloc[:, 0].dropna().unique())
 
-    # Prepare Amazon field name/value map
     amazon_field_map = {}
     for idx, row in amazon_df.iloc[1:].iterrows():
         field = str(row[0]).strip()
@@ -478,8 +385,6 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
 
     for field in scrape_fields:
         matched_data["Field Name"].append(field)
-        # match = process.extractOne(field, amazon_field_names, scorer=fuzz.token_set_ratio)
-        # value = amazon_field_map[match[0]] if match and match[1] >= 80 else ""
         
         match_field, score = smart_fuzzy_match(field, amazon_field_names, threshold=80)
         value = amazon_field_map[match_field] if match_field else ""
@@ -710,168 +615,3 @@ async def generate_amazon_description(product_url, doc_id):
 credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
 
-
-#  1. ONLY return values that exactly exist in the Possible Options list.
-#     2. DO NOT guess or assume values. If a clear, supported match is not found, return just `""`.
-#     3. NEVER return the field name itself, placeholder text (like "structured field", "none", or "n/a"), or irrelevant text like `"plaintext"`.
-#     4. If the field expects a specific value (like number of items, year, date), ONLY return it if it's explicitly mentioned in the product info.
-#     5. DO NOT return general categories (e.g., “STEM Kit”) for specific fields like Model Year, Product Launch Date, or Part Number unless it directly fits.
-#     6. DO NOT return the same value more than once.
-
-#     ### ✅ Output Format:
-#     - One matched value per line (no commas, no bullets)
-#     - Each value must be in its raw text form as shown in the Possible Options list
-#     - Do not return any explanations, headers, formatting, or extra text
-#     - If no valid matches are found, return just: `""` (on a single line)
-
-
-
-# def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, service_account_email: str):
-#     """
-#     - Gives editor access to the service account and all specified emails.
-#     - Makes the file viewable by anyone with the link.
-#     """
-#     try:
-#         creds = service_account.Credentials.from_service_account_file(
-#             credentials_file,
-#             scopes=["https://www.googleapis.com/auth/drive"]
-#         )
-#         drive_service = build('drive', 'v3', credentials=creds)
-
-#         # Grant editor access to the service account
-#         permission_sa = {
-#             'type': 'user',
-#             'role': 'writer',
-#             'emailAddress': service_account_email
-#         }
-#         drive_service.permissions().create(
-#             fileId=file_id,
-#             body=permission_sa,
-#             fields='id',
-#             sendNotificationEmail=False
-#         ).execute()
-#         print(f"✅ Editor access granted to service account: {service_account_email}")
-
-#         for viewer_email in {email, "fa19bse069@gmail.com"}:
-#             if viewer_email and viewer_email != service_account_email:
-#                 permission_user = {
-#                     'type': 'user',
-#                     'role': 'writer',
-#                     'emailAddress': viewer_email
-#                 }
-#                 drive_service.permissions().create(
-#                     fileId=file_id,
-#                     body=permission_user,
-#                     fields='id',
-#                     sendNotificationEmail=False
-#                 ).execute()
-#                 print(f"✅ Editor access granted to: {viewer_email}")
-
-#         # if email != service_account_email:
-#         #         permission_user = {
-#         #             'type': 'user',
-#         #             'role': 'writer',
-#         #             'emailAddress': email
-#         #         }
-#         #         drive_service.permissions().create(
-#         #             fileId=file_id,
-#         #             body=permission_user,
-#         #             fields='id',
-#         #             sendNotificationEmail=False
-#         #         ).execute()
-#         #         print(f"✅ Editor access granted to: {email}")
-
-#         # Make the file viewable by anyone with the link
-#         permission_public = {
-#             'type': 'anyone',
-#             'role': 'reader'
-#         }
-#         drive_service.permissions().create(
-#             fileId=file_id,
-#             body=permission_public,
-#             fields='id'
-#         ).execute()
-#         print("🌐 Public viewer access enabled (anyone with the link can view).")
-
-#     except Exception as e:
-#         raise Exception(f"❌ Error setting permissions: {e}")
-
-
-
-# def create_new_google_doc(title: str, credentials_file: str, folder_id: str):
-#     """
-#     Creates a new Google Doc with the given title and moves it to the specified folder.
-#     Returns the document ID and URL.
-#     """
-#     try:
-#         creds = service_account.Credentials.from_service_account_file(
-#             credentials_file,
-#             scopes=["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive"]
-#         )
-#         docs_service = build("docs", "v1", credentials=creds)
-#         drive_service = build("drive", "v3", credentials=creds)
-
-#         # Create the new document
-#         body = {"title": title}
-#         doc = docs_service.documents().create(body=body).execute()
-#         doc_id = doc.get("documentId")
-#         doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
-#         print(f"✅ Created new document: {doc_url}")
-
-#         # Get current parents
-#         file_metadata = drive_service.files().get(fileId=doc_id, fields="parents").execute()
-#         previous_parents = ",".join(file_metadata.get("parents", []))
-
-#         # Move doc to the target folder
-#         drive_service.files().update(
-#             fileId=doc_id,
-#             addParents=folder_id,
-#             removeParents=previous_parents,
-#             fields="id, parents"
-#         ).execute()
-#         print(f"📁 Moved doc to folder ID: {folder_id}")
-
-#         return doc_id, doc_url
-
-#     except Exception as e:
-#         raise Exception(f"Error creating and moving Google Doc: {e}")
-
-
-# def create_new_google_doc(title: str, credentials_file: str):
-#     """
-#     Creates a new Google Doc with the given title using the Docs API.
-#     Returns the document ID and URL.
-#     """
-#     try:
-#         creds = service_account.Credentials.from_service_account_file(
-#             credentials_file,
-#             scopes=["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive"]
-#         )
-#         docs_service = build("docs", "v1", credentials=creds)
-#         body = {"title": title}
-#         doc = docs_service.documents().create(body=body).execute()
-#         doc_id = doc.get("documentId")
-#         doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
-#         print(f"Created new document with title '{title}', ID: {doc_id}")
-#         return doc_id, doc_url
-#     except Exception as e:
-#         raise Exception(f"Error creating new Google Doc: {e}")
-
-
-
-    # 1. Carefully analyze all available product information, including titles, subtitles, descriptions, URLs, and contextual clues.
-    # 2. Use intelligent matching techniques, including:
-    # - Case-insensitive matching for substrings and similar word forms.
-    # - Match on roots and morphological variants (e.g. “engineer”: “Engineering Skills”, “science” : “Scientific Thinking”).
-    # - Handle plural forms, tense changes, and common abbreviations (e.g. “run”: “running”).
-    # - Match similar words or concepts (e.g. “construct” : “construction”).
-    # - Recognize implied educational contexts, synonyms, or keywords (e.g. “STEM” and “Science” can be closely related).
-    # 3. If an option is **not explicitly stated**, but is **strongly implied** by the product’s use case or context, include it.
-    # 4. Return **up to 5 best-matching values** from the possible options based on relevance, inferred meaning, and fuzzy matching.
-    # 5. The output should be **a comma-separated list**, only including the best matches, ranked by relevance.
-    # 6. If no valid matches are found, return an "---"
-    # 7. Avoid hallucination or fabricating attributes. Only return matches that can be **inferred** from the product’s context.
-    # 8. Ignore any terms like "structured field", "empty string", "none", or "n/a".
-    # 9. Return exactly one best‑matching value (a single word) from the possible options, ranked by relevance.
-    # 10. If no valid match exists, return exactly an empty string: "".
-    # 11. Do not include any justifications, explanations, or additional text.
