@@ -31,6 +31,7 @@ import difflib
 from rapidfuzz import fuzz, process
 import asyncio
 from test import scrape_amazon_with_playwright
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -78,20 +79,12 @@ async def keywords(data:RequestData):
         doc_title = "Amazon OpenFields"
         docs_folder_id = "1bP42e7fENju_sef0UACNdZzRKsvhLSGq"
         doc_id, doc_url = create_new_google_doc(doc_title, credentials_file, docs_folder_id)
+        print(f"✅ New Google Doc URL: {doc_url}")
         make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email, docs_folder_id)
         keywords = await generate_amazon_backend_keywords(data.product_url, doc_id,data.keyword_url)
         return {"status": "success", "message": "keywords generated successfully", "keywords":keywords}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering keywords: {e}")
-
-@app.post("/structuredfields")
-async def structuredfields(data:RequestData):
-    try:
-        # match_and_create_google_sheet(credentials_file, data.amazon_url, data.scrape_url, data.googlesheet_url, data.product_url)
-        return {"status": "success", "message": "google sheet generated successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering structuredfields: {e}")
-
 
 @app.get("/sheets")
 @app.post("/sheets")
@@ -113,32 +106,38 @@ async def sheets_functions(data: RequestData):
 @app.post("/trigger")
 async def trigger_functions(data: RequestData):
     try:
-        # print("Generating Google Sheet:")
         print("Generating Google Sheet:")
-        message = match_and_create_new_google_sheet(
+        message = await match_and_create_new_google_sheet(
             credentials_file, data.amazon_url, data.scrape_url, data.product_url, data.emails
         )
     
         doc_title = "Amazon OpenFields"
-        # docs_folder_id = "1EfuhG0aloXUadQjXsxBztJi0soTAmuep"
         docs_folder_id = "1bP42e7fENju_sef0UACNdZzRKsvhLSGq"
         doc_id, doc_url = create_new_google_doc(doc_title, credentials_file, docs_folder_id)
-
+        print(f"✅✅✅✅✅ New Google Doc URL: {doc_url}")
         make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email, docs_folder_id)
 
-        print("Generating Google Docs:")
-        await generate_amazon_backend_keywords(data.product_url, doc_id, data.keyword_url)
-        await generate_amazon_bullets(data.product_url, doc_id)
-        await generate_amazon_description(data.product_url, doc_id)
-        await generate_amazon_title(data.product_url, doc_id)
-        print("Results Generated")
+        # print("Generating Google Docs:")
+        # await generate_amazon_backend_keywords(data.product_url, doc_id, data.keyword_url)
+        # await generate_amazon_bullets(data.product_url, doc_id)
+        # await generate_amazon_description(data.product_url, doc_id)
+        # await generate_amazon_title(data.product_url, doc_id)
+        # print("Results Generatedddd")
         return {
             "status": "success", 
             "google_sheets":message,
             "google_docs": doc_url
         }
+    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error triggering /trigger: {e}")
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "google_sheets": f"Error: {str(e)}",
+                "google_docs": f"Error: {str(e)}"
+            }
+        )
 
 STOPWORDS = {"type", "attribute", "field", "value", "description", "free", "name"}
 BLOCK_PREFIXES = {"variation", "is", "item", "minimum", "maximum", "manufacturer"}
@@ -280,44 +279,13 @@ def normalize_field(text):
 
 async def scrape_product_info(product_url):
     print("scrape_product_info")
-    print(product_url)
+    # print(product_url)
     try:
         print("HEREEEEE")
         return await scrape_amazon_with_playwright(product_url)
     except Exception as e:
         print(f"Error scraping product info: {e}")
         return None  
-
-
-# def scrape_product_info(product_url):
-#     print('scrape_product_info')
-#     """Extracts ALL text from the product page, removing excessive whitespace."""
-#     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-    
-#     # Retry loop to keep trying until status code 200 is received
-#     while True:
-#         try:
-#             print("here 1")
-#             response = requests.get(product_url, headers=headers)
-#             print("response")
-#             print(response.status_code)
-            
-#             if response.status_code == 200:
-#                 print("here 2")
-#                 soup = BeautifulSoup(response.text, "html.parser")
-#                 print("soup")
-#                 all_text = soup.get_text(separator=" ").lower()
-#                 print("all_text")
-#                 cleaned_text = re.sub(r'\s+', ' ', all_text).strip()
-#                 print("cleaned_text")
-#                 return cleaned_text
-#             else:
-#                 print(f"Failed to fetch product page: {response.status_code}. Retrying...")
-#                 time.sleep(2)  # Wait for 2 seconds before retrying
-            
-#         except Exception as e:
-#             print(f"Error scraping product info: {e}")
-#             return None
 
 def is_specific_field(field_name):
     return any(keyword in field_name.lower() for keyword in [
@@ -357,8 +325,9 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
        - Return **one value per line**
        - Return **only** the matched value (no extra explanation or formatting)
        - Don’t use bullet points, numbers, or dashes
-    7. if something totally unrelated is mentioned in the {field_name} then you have to ignore it. dont assume values. eg if the product is shampoo but there is mention of league name or sports or team name you have to ignore
-    8. if the product is not related to sports then dont write anything in the League Name or Team Name
+    7. if something totally unrelated is mentioned in the {field_name} and  {field_value} then you have to ignore it. dont assume values. eg if the product is shampoo but there is mention of league name or sports or team name you have to ignore
+    8. if the product {product_info} is not related to sports then dont write anything in the League Name or Team Name. LEAVE IT EMPTY for example: if the product is related to shampoo and you see {field_name} and  {field_value} related to  team name or league name for example soccer football or anything related to sports DONT WRITE ANYTHING LEAVE IT EMPTY OR JUST WRITE "" STRICTLY
+    9. if the {field_name} and {field_value} is about number of items, quantity, part number, size or anything quantity related just return 1 value/1 AI Best Matched
     Begin now:
     """
     
@@ -367,7 +336,7 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
         messages=[{"role": "user", "content": ai_prompt}]
     )
 
-    print("product_info")
+    # print("product_info")
     print("field_name",field_name)
     print("field_value",field_value)
     print("possible_values",possible_values)
@@ -407,6 +376,7 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
     new_spreadsheet = gc.create(new_sheet_title)
     file_id = new_spreadsheet.id
     new_sheet_url = new_spreadsheet.url
+    print(f"✅✅✅✅✅ New Google Sheet URL: {new_sheet_url}")
 
     # folder_id = "1uZ2fYhdztV5GjoNHy8qVb6rLNHWwDEED" parent id
     # folder_id = "16dRFiBElEm7s2KVPyLTedkw5XJQ-hAiF" #child id
@@ -419,7 +389,7 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
     scraped_text = await scrape_product_info(product_url)
 
     print("Scraped text is")
-    print(scraped_text)
+    # print(scraped_text)
 
 
     if scraped_text is None:
