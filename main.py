@@ -347,7 +347,7 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     ### Possible Options (from the Google Sheet):
     {', '.join(possible_values)}
 
-    ### 🔒 Rules:
+    ### 🔒 Rules::
     1. Carefully consider the full product context — titles, descriptions, keywords, use case, etc.
     2. Match up to 5 values from the Possible Options list that best fit the meaning or implication of the field value and product info.
     3. Only choose values that exist in the Possible Options list.
