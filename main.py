@@ -61,6 +61,7 @@ credentials = {
     "universe_domain": os.getenv("universe_domain", "")
 }
 service_account_email = credentials["client_email"]
+# print("")
 
 json_filename = "google_credentials.json"
 
