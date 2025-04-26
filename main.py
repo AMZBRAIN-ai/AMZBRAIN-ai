@@ -1,13 +1,3 @@
-
-# if not related to sports leave it empty
-# other use cases mentioned 3
-# new spreadsheet each time
-# use keyword url
-# save people's emails and dates in spreadhsehet
-# remove test workflow move to production
-# check threshold
-
-
 import gspread
 import pandas as pd
 import requests
