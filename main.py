@@ -85,6 +85,7 @@ def scrape_url(url: str) -> str:
     driver = webdriver.Chrome(options=chrome_options)
     try:
         driver.get(url)
+        print("in scrape_url")
         body = driver.find_element("tag name", "body")
         return body.text
     finally:
@@ -97,6 +98,8 @@ async def scrape_product_info(product_url: str):
     try:
         print("HEREEEEE")
         text_content = await asyncio.get_event_loop().run_in_executor(executor, scrape_url, product_url)
+        print("out of scrape_url")
+        print(text_content)
         return text_content
     except Exception as e:
         print(f"Error scraping product info: {e}")
