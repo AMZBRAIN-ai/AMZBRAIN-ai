@@ -110,6 +110,9 @@ async def scrape(request: URLRequest):
     text_content = await scrape_product_info(request.url)
     return text_content
 
+@app.get("/")
+async def read_root():
+    return "Hello"
 
 
 @app.post("/keywords")
