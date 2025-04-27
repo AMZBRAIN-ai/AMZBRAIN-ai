@@ -47,6 +47,7 @@ typing_extensions
 tzdata
 urllib3
 uvicorn
+selenium
 
 # asyncio
 # beautifulsoup4
