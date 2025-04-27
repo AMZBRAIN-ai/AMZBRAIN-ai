@@ -22,6 +22,11 @@ from rapidfuzz import fuzz, process
 from fastapi.responses import JSONResponse
 import subprocess
 from playwright.async_api import async_playwright
+from pydantic import BaseModel
+from fastapi import FastAPI
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from fastapi.responses import PlainTextResponse
 
 app = FastAPI()
 
@@ -63,6 +68,31 @@ credentials = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
 )
 docs_service = build("docs", "v1", credentials=credentials)
+
+
+
+class URLRequest(BaseModel):
+    url: str
+
+chrome_options = Options()
+chrome_options.add_argument("--headless")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+
+@app.post("/scrape", response_class=PlainTextResponse)
+def scrape(request: URLRequest):
+    driver = webdriver.Chrome(options=chrome_options)
+    try:
+        driver.get(request.url)
+        body = driver.find_element("tag name", "body")
+        text_content = body.text
+    finally:
+        driver.quit()
+
+    return text_content
+
+
+
 
 @app.post("/keywords")
 async def keywords(data:RequestData):
