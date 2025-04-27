@@ -22,6 +22,7 @@ from rapidfuzz import fuzz, process
 import asyncio
 from test import scrape_amazon_with_playwright
 from fastapi.responses import JSONResponse
+from playwright.async_api import async_playwright
 
 app = FastAPI()
 
@@ -266,6 +267,15 @@ def normalize_field(text):
     text = re.sub(r'[^a-z0-9\s]', '', text)
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
+
+async def scrape_amazon_with_playwright(url):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url, timeout=600000)
+        text = await page.inner_text('body')
+        await browser.close()
+        return re.sub(r'\s+', ' ', text).strip()
 
 
 async def scrape_product_info(product_url):
