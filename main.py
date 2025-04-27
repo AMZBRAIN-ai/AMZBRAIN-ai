@@ -27,6 +27,9 @@ from fastapi import FastAPI
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from fastapi.responses import PlainTextResponse
+from concurrent.futures import ThreadPoolExecutor
+
+
 
 app = FastAPI()
 
@@ -70,7 +73,6 @@ credentials = service_account.Credentials.from_service_account_file(
 docs_service = build("docs", "v1", credentials=credentials)
 
 
-
 class URLRequest(BaseModel):
     url: str
 
@@ -79,18 +81,31 @@ chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 
-@app.post("/scrape", response_class=PlainTextResponse)
-def scrape(request: URLRequest):
+def scrape_url(url: str) -> str:
     driver = webdriver.Chrome(options=chrome_options)
     try:
-        driver.get(request.url)
+        driver.get(url)
         body = driver.find_element("tag name", "body")
-        text_content = body.text
+        return body.text
     finally:
         driver.quit()
 
-    return text_content
+executor = ThreadPoolExecutor(max_workers=3)
 
+async def scrape_product_info(product_url: str):
+    print("scrape_product_info")
+    try:
+        print("HEREEEEE")
+        text_content = await asyncio.get_event_loop().run_in_executor(executor, scrape_url, product_url)
+        return text_content
+    except Exception as e:
+        print(f"Error scraping product info: {e}")
+        return None
+
+@app.post("/scrape", response_class=PlainTextResponse)
+async def scrape(request: URLRequest):
+    text_content = await scrape_product_info(request.url)
+    return text_content
 
 
 
@@ -341,15 +356,15 @@ async def scrape_amazon_with_playwright(url):
 #         return re.sub(r'\s+', ' ', text).strip()
 
 
-async def scrape_product_info(product_url):
-    print("scrape_product_info")
-    # print(product_url)
-    try:
-        print("HEREEEEE")
-        return await scrape_amazon_with_playwright(product_url)
-    except Exception as e:
-        print(f"Error scraping product info: {e}")
-        return None  
+# async def scrape_product_info(product_url):
+#     print("scrape_product_info")
+#     # print(product_url)
+#     try:
+#         print("HEREEEEE")
+#         return await scrape_amazon_with_playwright(product_url)
+#     except Exception as e:
+#         print(f"Error scraping product info: {e}")
+#         return None  
 
 def is_specific_field(field_name):
     return any(keyword in field_name.lower() for keyword in [
