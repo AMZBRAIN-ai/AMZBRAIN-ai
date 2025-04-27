@@ -267,16 +267,21 @@ def normalize_field(text):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-async def install_browsers_if_needed():
+_playwright_installed = False
+
+async def install_browsers_once():
+    global _playwright_installed
+    if _playwright_installed:
+        return
     if not os.path.exists("/app/.cache/ms-playwright"):
         print("▶ Installing Playwright Browsers...")
         subprocess.run(["playwright", "install", "chromium"], check=True)
     else:
         print("▶ Browsers already installed.")
-
+    _playwright_installed = True
 
 async def scrape_amazon_with_playwright(url):
-    await install_browsers_if_needed()
+    await install_browsers_once()
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
@@ -284,6 +289,26 @@ async def scrape_amazon_with_playwright(url):
         text = await page.inner_text('body')
         await browser.close()
         return re.sub(r'\s+', ' ', text).strip()
+
+
+
+# async def install_browsers_if_needed():
+#     if not os.path.exists("/app/.cache/ms-playwright"):
+#         print("▶ Installing Playwright Browsers...")
+#         subprocess.run(["playwright", "install", "chromium"], check=True)
+#     else:
+#         print("▶ Browsers already installed.")
+
+
+# async def scrape_amazon_with_playwright(url):
+#     await install_browsers_if_needed()
+#     async with async_playwright() as p:
+#         browser = await p.chromium.launch(headless=True)
+#         page = await browser.new_page()
+#         await page.goto(url, timeout=600000)
+#         text = await page.inner_text('body')
+#         await browser.close()
+#         return re.sub(r'\s+', ' ', text).strip()
 
 
 async def scrape_product_info(product_url):
