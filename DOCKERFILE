@@ -8,7 +8,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 4) Copy your FastAPI app
+# 4) Copy your FastAPI appsss
 COPY . .
 
 # 5) Expose the port your app uses
