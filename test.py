@@ -1,6 +1,8 @@
 import asyncio
 import subprocess
 import os
+from playwright.async_api import async_playwright
+import re
 
 async def install_browsers_if_needed():
     if not os.path.exists("/app/.cache/ms-playwright"):
@@ -9,9 +11,6 @@ async def install_browsers_if_needed():
     else:
         print("▶ Browsers already installed.")
 
-# Example how you modify your function
-from playwright.async_api import async_playwright
-import re
 
 async def scrape_amazon_with_playwright(url):
     await install_browsers_if_needed()  # 🛠 Install browsers first if missing
