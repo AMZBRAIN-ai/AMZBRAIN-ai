@@ -91,19 +91,29 @@ def scrape_url(url: str) -> str:
     finally:
         driver.quit()
 
-executor = ThreadPoolExecutor(max_workers=3)
-
 async def scrape_product_info(product_url: str):
     print("scrape_product_info")
     try:
         print("HEREEEEE")
-        text_content = await asyncio.get_event_loop().run_in_executor(executor, scrape_url, product_url)
+        text_content = scrape_url(product_url)  # <-- Direct call, no await needed
         print("out of scrape_url")
         print(text_content)
         return text_content
     except Exception as e:
         print(f"Error scraping product info: {e}")
         return None
+    
+# async def scrape_product_info(product_url: str):
+#     print("scrape_product_info")
+#     try:
+#         print("HEREEEEE")
+#         text_content = await asyncio.get_event_loop().run_in_executor(executor, scrape_url, product_url)
+#         print("out of scrape_url")
+#         print(text_content)
+#         return text_content
+#     except Exception as e:
+#         print(f"Error scraping product info: {e}")
+#         return None
 
 @app.post("/scrape", response_class=PlainTextResponse)
 async def scrape(request: URLRequest):
