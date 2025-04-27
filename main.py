@@ -28,7 +28,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from fastapi.responses import PlainTextResponse
 from concurrent.futures import ThreadPoolExecutor
-
+import tempfile
 
 
 app = FastAPI()
@@ -76,20 +76,50 @@ docs_service = build("docs", "v1", credentials=credentials)
 class URLRequest(BaseModel):
     url: str
 
-chrome_options = Options()
-chrome_options.add_argument("--headless")
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
+def create_chrome_driver():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Run in headless mode (no window)
+    chrome_options.add_argument("--no-sandbox")  # Required for cloud environments
+    chrome_options.add_argument("--disable-dev-shm-usage")  # Avoid shared memory crashes
+    chrome_options.add_argument("--disable-gpu")  # Disable GPU (not needed for text scraping)
+    chrome_options.add_argument("--window-size=1920,1080")  # Standard full HD window size
+    
+    # Create a temporary user data directory (fixes session creation issues on cloud)
+    temp_dir = tempfile.mkdtemp()
+    chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+    
+    # Create the Chrome driver
+    driver = webdriver.Chrome(options=chrome_options)
+    return driver
 
 def scrape_url(url: str) -> str:
-    driver = webdriver.Chrome(options=chrome_options)
+    driver = create_chrome_driver()
     try:
         driver.get(url)
-        print("in scrape_url")
+        print("In scrape_url, page loaded.")
         body = driver.find_element("tag name", "body")
         return body.text
     finally:
         driver.quit()
+        print("Driver closed.")
+
+# chrome_options = Options()
+# chrome_options.add_argument("--headless")
+# chrome_options.add_argument("--no-sandbox")
+# chrome_options.add_argument("--disable-dev-shm-usage")
+# chrome_options.add_argument("--disable-gpu")
+# chrome_options.add_argument("--window-size=1920,1080")
+
+
+# def scrape_url(url: str) -> str:
+#     driver = webdriver.Chrome(options=chrome_options)
+#     try:
+#         driver.get(url)
+#         print("in scrape_url")
+#         body = driver.find_element("tag name", "body")
+#         return body.text
+#     finally:
+#         driver.quit()
 
 async def scrape_product_info(product_url: str):
     print("scrape_product_info")
@@ -103,18 +133,6 @@ async def scrape_product_info(product_url: str):
         print(f"Error scraping product info: {e}")
         return None
     
-# async def scrape_product_info(product_url: str):
-#     print("scrape_product_info")
-#     try:
-#         print("HEREEEEE")
-#         text_content = await asyncio.get_event_loop().run_in_executor(executor, scrape_url, product_url)
-#         print("out of scrape_url")
-#         print(text_content)
-#         return text_content
-#     except Exception as e:
-#         print(f"Error scraping product info: {e}")
-#         return None
-
 @app.post("/scrape", response_class=PlainTextResponse)
 async def scrape(request: URLRequest):
     text_content = await scrape_product_info(request.url)
