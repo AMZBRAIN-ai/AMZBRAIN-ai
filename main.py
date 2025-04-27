@@ -19,9 +19,8 @@ import re
 import time
 import difflib
 from rapidfuzz import fuzz, process
-import asyncio
-from test import scrape_amazon_with_playwright
 from fastapi.responses import JSONResponse
+import subprocess
 from playwright.async_api import async_playwright
 
 app = FastAPI()
@@ -268,7 +267,16 @@ def normalize_field(text):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
+async def install_browsers_if_needed():
+    if not os.path.exists("/app/.cache/ms-playwright"):
+        print("▶ Installing Playwright Browsers...")
+        subprocess.run(["playwright", "install", "chromium"], check=True)
+    else:
+        print("▶ Browsers already installed.")
+
+
 async def scrape_amazon_with_playwright(url):
+    await install_browsers_if_needed()
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
