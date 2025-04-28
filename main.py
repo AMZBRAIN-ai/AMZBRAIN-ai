@@ -76,66 +76,51 @@ docs_service = build("docs", "v1", credentials=credentials)
 class URLRequest(BaseModel):
     url: str
 
-def create_chrome_driver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode (no window)
-    chrome_options.add_argument("--no-sandbox")  # Required for cloud environments
-    chrome_options.add_argument("--disable-dev-shm-usage")  # Avoid shared memory crashes
-    chrome_options.add_argument("--disable-gpu")  # Disable GPU (not needed for text scraping)
-    chrome_options.add_argument("--window-size=1920,1080")  # Standard full HD window size
+# def create_chrome_driver():
+#     chrome_options = Options()
+#     chrome_options.add_argument("--headless")  # Run in headless mode (no window)
+#     chrome_options.add_argument("--no-sandbox")  # Required for cloud environments
+#     chrome_options.add_argument("--disable-dev-shm-usage")  # Avoid shared memory crashes
+#     chrome_options.add_argument("--disable-gpu")  # Disable GPU (not needed for text scraping)
+#     chrome_options.add_argument("--window-size=1920,1080")  # Standard full HD window size
     
-    # Create a temporary user data directory (fixes session creation issues on cloud)
-    temp_dir = tempfile.mkdtemp()
-    chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+#     # Create a temporary user data directory (fixes session creation issues on cloud)
+#     temp_dir = tempfile.mkdtemp()
+#     chrome_options.add_argument(f"--user-data-dir={temp_dir}")
     
-    # Create the Chrome driver
-    driver = webdriver.Chrome(options=chrome_options)
-    return driver
-
-def scrape_url(url: str) -> str:
-    driver = create_chrome_driver()
-    try:
-        driver.get(url)
-        print("In scrape_url, page loaded.")
-        body = driver.find_element("tag name", "body")
-        return body.text
-    finally:
-        driver.quit()
-        print("Driver closed.")
-
-# chrome_options = Options()
-# chrome_options.add_argument("--headless")
-# chrome_options.add_argument("--no-sandbox")
-# chrome_options.add_argument("--disable-dev-shm-usage")
-# chrome_options.add_argument("--disable-gpu")
-# chrome_options.add_argument("--window-size=1920,1080")
-
+#     # Create the Chrome driver
+#     driver = webdriver.Chrome(options=chrome_options)
+#     return driver
 
 # def scrape_url(url: str) -> str:
-#     driver = webdriver.Chrome(options=chrome_options)
+#     driver = create_chrome_driver()
 #     try:
 #         driver.get(url)
-#         print("in scrape_url")
+#         print("In scrape_url, page loaded.")
 #         body = driver.find_element("tag name", "body")
 #         return body.text
 #     finally:
 #         driver.quit()
+#         print("Driver closed.")
 
-async def scrape_product_info(product_url: str):
-    print("scrape_product_info")
-    try:
-        print("HEREEEEE")
-        text_content = scrape_url(product_url)  # <-- Direct call, no await needed
-        print("out of scrape_url")
-        print(text_content)
-        return text_content
-    except Exception as e:
-        print(f"Error scraping product info: {e}")
-        return None
+
+# async def scrape_product_info(product_url: str):
+#     print("scrape_product_info")
+#     try:
+#         print("HEREEEEE")
+#         text_content = scrape_url(product_url)  # <-- Direct call, no await needed
+#         print("out of scrape_url")
+#         print(text_content)
+#         return text_content
+#     except Exception as e:
+#         print(f"Error scraping product info: {e}")
+#         return None
     
 @app.post("/scrape", response_class=PlainTextResponse)
 async def scrape(request: URLRequest):
+    print("inside text_content")
     text_content = await scrape_product_info(request.url)
+    print("outside text_content")
     return text_content
 
 @app.get("/")
@@ -346,21 +331,21 @@ def normalize_field(text):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-_playwright_installed = False
+# _playwright_installed = False
 
-async def install_browsers_once():
-    global _playwright_installed
-    if _playwright_installed:
-        return
-    if not os.path.exists("/app/.cache/ms-playwright"):
-        print("▶ Installing Playwright Browsers...")
-        subprocess.run(["playwright", "install", "chromium"], check=True)
-    else:
-        print("▶ Browsers already installed.")
-    _playwright_installed = True
+# async def install_browsers_once():
+#     global _playwright_installed
+#     if _playwright_installed:
+#         return
+#     if not os.path.exists("/app/.cache/ms-playwright"):
+#         print("▶ Installing Playwright Browsers...")
+#         subprocess.run(["playwright", "install", "chromium"], check=True)
+#     else:
+#         print("▶ Browsers already installed.")
+#     _playwright_installed = True
 
 async def scrape_amazon_with_playwright(url):
-    await install_browsers_once()
+    # await install_browsers_once()
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
@@ -390,15 +375,15 @@ async def scrape_amazon_with_playwright(url):
 #         return re.sub(r'\s+', ' ', text).strip()
 
 
-# async def scrape_product_info(product_url):
-#     print("scrape_product_info")
-#     # print(product_url)
-#     try:
-#         print("HEREEEEE")
-#         return await scrape_amazon_with_playwright(product_url)
-#     except Exception as e:
-#         print(f"Error scraping product info: {e}")
-#         return None  
+async def scrape_product_info(product_url):
+    print("scrape_product_info")
+    # print(product_url)
+    try:
+        print("HEREEEEE")
+        return await scrape_amazon_with_playwright(product_url)
+    except Exception as e:
+        print(f"Error scraping product info: {e}")
+        return None  
 
 def is_specific_field(field_name):
     return any(keyword in field_name.lower() for keyword in [
