@@ -63,13 +63,15 @@ service_account_email = credentials["client_email"]
 
 json_filename = "google_credentials.json"
 
-with open(json_filename, "w") as json_file:
-    json.dump(credentials, json_file, indent=4)
-SERVICE_ACCOUNT_FILE =json_filename
+# main.py
 
+SERVICE_ACCOUNT_FILE = "google_credentials.json"
+
+SERVICE_ACCOUNT_FILE = "google_credentials.json"
 credentials = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
 )
+
 docs_service = build("docs", "v1", credentials=credentials)
 
 
