@@ -6,7 +6,7 @@ WORKDIR /app
 
 # 3) Copy & install Python requirements
 COPY requirements.txt .
-COPY google_credentials.json .
+# COPY google_credentials.json .
 
 RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium

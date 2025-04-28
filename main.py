@@ -30,6 +30,20 @@ from fastapi.responses import PlainTextResponse
 from concurrent.futures import ThreadPoolExecutor
 import tempfile
 
+import os
+import base64
+
+load_dotenv()
+# Check if file missing
+if not os.path.exists("google_credentials.json"):
+    encoded = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+    if not encoded:
+        raise Exception("GOOGLE_CREDENTIALS_BASE64 environment variable not set.")
+    decoded = base64.b64decode(encoded).decode('utf-8')
+    with open("google_credentials.json", "w") as f:
+        f.write(decoded)
+    print("✅ google_credentials.json file created from environment variable")
+    
 
 app = FastAPI()
 
@@ -40,7 +54,7 @@ class RequestData(BaseModel):
     product_url: str
     emails: str
 
-load_dotenv()
+
 
 api_key = os.getenv("OPENAI_API_KEY")
 SCOPES = ["https://www.googleapis.com/auth/documents"]
