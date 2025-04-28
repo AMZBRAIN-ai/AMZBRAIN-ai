@@ -15,6 +15,6 @@ COPY . .
 EXPOSE 3000
 
 # 6) Default command: no more 'install-deps' needed — it's all in the image
+
 # CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3000"]
 CMD uvicorn main:app --host 0.0.0.0 --port 3000
-
