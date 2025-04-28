@@ -347,7 +347,8 @@ async def install_browsers_once():
 async def scrape_amazon_with_playwright(url):
     await install_browsers_once()
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        # browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(channel="chrome", headless=True)
         page = await browser.new_page()
         await page.goto(url, timeout=600000)
         text = await page.inner_text('body')
