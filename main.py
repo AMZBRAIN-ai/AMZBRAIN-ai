@@ -35,14 +35,14 @@ import base64
 
 load_dotenv()
 # Check if file missing
-# if not os.path.exists("google_credentials.json"):
-#     encoded = os.getenv("GOOGLE_CREDENTIALS_BASE64")
-#     if not encoded:
-#         raise Exception("GOOGLE_CREDENTIALS_BASE64 environment variable not set.")
-#     decoded = base64.b64decode(encoded).decode('utf-8')
-#     with open("google_credentials.json", "w") as f:
-#         f.write(decoded)
-#     print("✅ google_credentials.json file created from environment variable")
+if not os.path.exists("google_credentials.json"):
+    encoded = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+    if not encoded:
+        raise Exception("GOOGLE_CREDENTIALS_BASE64 environment variable not set.")
+    decoded = base64.b64decode(encoded).decode('utf-8')
+    with open("google_credentials.json", "w") as f:
+        f.write(decoded)
+    print("✅ google_credentials.json file created from environment variable")
 
 credentials = {
     "type": os.getenv("type", ""),
@@ -58,8 +58,8 @@ credentials = {
     "universe_domain": os.getenv("universe_domain", "")
 }
 
-with open("google_credentials.json", "w") as json_file:
-    json.dump(credentials, json_file, indent=4)
+# with open("google_credentials.json", "w") as json_file:
+#     json.dump(credentials, json_file, indent=4)
 
 
 
@@ -174,6 +174,12 @@ async def trigger_functions(data: RequestData):
 STOPWORDS = {"type", "attribute", "field", "value", "description", "free", "name"}
 BLOCK_PREFIXES = {"variation", "is", "item", "minimum", "maximum", "manufacturer"}
 
+manual_mapping = {
+    "Color": "Color Map",
+    "Required Assembly": "Is Assembly Required",
+    "Target Gender": "Target Audience",
+    "Included Components": "Includes Remote"
+}
 def preprocess(field: str) -> str:
     return " ".join([w.lower() for w in field.split() if w.lower() not in STOPWORDS])
 
@@ -300,12 +306,6 @@ def get_google_sheet_data(gc, sheet_url):
     df = pd.DataFrame(sheet.get_all_records())
     return df.dropna(how="all")
 
-def normalize_field(text):
-    text = text.lower()
-    text = re.sub(r'[^a-z0-9\s]', '', text)
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
-
 _playwright_installed = False
 
 async def install_browsers_once():
@@ -382,7 +382,13 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     7. if something totally unrelated is mentioned in the {field_name} and  {field_value} then you have to ignore it. dont assume values. eg if the product is shampoo but there is mention of league name or sports or team name you have to ignore
     8. if the product {product_info} is not related to sports then dont write anything in the League Name or Team Name. LEAVE IT EMPTY for example: if the product is related to shampoo and you see {field_name} and  {field_value} related to  team name or league name for example soccer football or anything related to sports DONT WRITE ANYTHING LEAVE IT EMPTY OR JUST WRITE "" STRICTLY
     9. if the {field_name} and {field_value} is about number of items, quantity, part number, size or anything quantity related just return 1 value/1 AI Best Matched
-    Begin now:
+   10. Note that the following values are same so you can use their {field_value} for the {field_name}:
+        "Color" and  "Color Map"
+        "Required Assembly" and "Is Assembly Required"
+        "Target Gender" and "Target Audience"
+        "Included Components" and "Includes Remote"
+
+     Begin now:
     """
     
     response = client.chat.completions.create(
@@ -406,14 +412,26 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
         clean = clean_match(m)
         if clean.lower() not in banned and clean not in matches:
             matches.append(clean)
-    
+
+
+    product_lower = product_info.lower()
+    field_lower = field_name.lower()
+
+    # Check for non-sports products and prevent invalid League/Team names
+    if ("league name" in field_lower or "team name" in field_lower):
+        sports_keywords = ["sports", "football", "soccer", "nba", "mlb", "team", "league", "club", "hockey", "cricket"]
+        if not any(word in product_lower for word in sports_keywords):
+            return [''] * 5  # Force empty if unrelated to sports
+
     if is_specific_field(field_name) and matches:
         return [matches[0]] + [""] * 4
     else:
         return matches[:5] + [""] * (5 - len(matches))
-
-def compute_similarity(a: str, b: str) -> float:
-    return fuzz.token_set_ratio(a, b) / 100
+    
+    # if is_specific_field(field_name) and matches:
+    #     return [matches[0]] + [""] * 4
+    # else:
+    #     return matches[:5] + [""] * (5 - len(matches))
 
 async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, scrap_url: str, product_url: str, emails: str) -> str:
     gc = authenticate_gspread(credentials_file)
@@ -462,12 +480,18 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
     amazon_field_names = list(amazon_field_map.keys())
 
     for field in scrape_fields:
-        matched_data["Field Name"].append(field)
-        # match = process.extractOne(field, amazon_field_names, scorer=fuzz.token_set_ratio)
-        # value = amazon_field_map[match[0]] if match and match[1] >= 80 else ""
-        
-        match_field, score = smart_fuzzy_match(field, amazon_field_names, threshold=80)
-        value = amazon_field_map[match_field] if match_field else ""
+        matched_data["Field Name"].append(field)  
+         # First try manual mapping
+        manual_match = manual_mapping.get(field, None)
+
+        if manual_match and manual_match in amazon_field_map:
+            match_field = manual_match
+            value = amazon_field_map[manual_match]
+            score = 100  # Manual match always gets a score of 100
+        else:
+            # If no manual match, use fuzzy matching
+            match_field, score = smart_fuzzy_match(field, amazon_field_names, threshold=80)
+            value = amazon_field_map[match_field] if match_field else ""
         possible_options = scrap_df.loc[scrap_df.iloc[:, 0] == field].iloc[:, 1].dropna().tolist()
         ai_matches = get_top_matches(scraped_text, field, str(value), possible_options)
         ai_matches = ai_matches[:5] + [""] * (5 - len(ai_matches))
