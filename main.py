@@ -35,15 +35,33 @@ import base64
 
 load_dotenv()
 # Check if file missing
-if not os.path.exists("google_credentials.json"):
-    encoded = os.getenv("GOOGLE_CREDENTIALS_BASE64")
-    if not encoded:
-        raise Exception("GOOGLE_CREDENTIALS_BASE64 environment variable not set.")
-    decoded = base64.b64decode(encoded).decode('utf-8')
-    with open("google_credentials.json", "w") as f:
-        f.write(decoded)
-    print("✅ google_credentials.json file created from environment variable")
-    
+# if not os.path.exists("google_credentials.json"):
+#     encoded = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+#     if not encoded:
+#         raise Exception("GOOGLE_CREDENTIALS_BASE64 environment variable not set.")
+#     decoded = base64.b64decode(encoded).decode('utf-8')
+#     with open("google_credentials.json", "w") as f:
+#         f.write(decoded)
+#     print("✅ google_credentials.json file created from environment variable")
+
+credentials = {
+    "type": os.getenv("type", ""),
+    "project_id": os.getenv("project_id", ""),
+    "private_key_id": os.getenv("private_key_id", ""),
+    "private_key": os.getenv("private_key", "").replace('\\n', '\n'),  # Ensure correct newlines
+    "client_email": os.getenv("client_email", ""),
+    "client_id": os.getenv("client_id", ""),
+    "auth_uri": os.getenv("auth_uri", ""),
+    "token_uri": os.getenv("token_uri", ""),
+    "auth_provider_x509_cert_url": os.getenv("auth_provider_x509_cert_url", ""),
+    "client_x509_cert_url": os.getenv("client_x509_cert_url", ""),
+    "universe_domain": os.getenv("universe_domain", "")
+}
+
+with open("google_credentials.json", "w") as json_file:
+    json.dump(credentials, json_file, indent=4)
+
+
 
 app = FastAPI()
 
@@ -59,28 +77,11 @@ class RequestData(BaseModel):
 api_key = os.getenv("OPENAI_API_KEY")
 SCOPES = ["https://www.googleapis.com/auth/documents"]
 
-credentials = {
-    "type": os.getenv("type", ""),
-    "project_id": os.getenv("project_id", ""),
-    "private_key_id": os.getenv("private_key_id", ""),
-    "private_key": os.getenv("private_key", "").replace('\\n', '\n'),  # Ensure correct newlines
-    "client_email": os.getenv("client_email", ""),
-    "client_id": os.getenv("client_id", ""),
-    "auth_uri": os.getenv("auth_uri", ""),
-    "token_uri": os.getenv("token_uri", ""),
-    "auth_provider_x509_cert_url": os.getenv("auth_provider_x509_cert_url", ""),
-    "client_x509_cert_url": os.getenv("client_x509_cert_url", ""),
-    "universe_domain": os.getenv("universe_domain", "")
-}
+
+
 service_account_email = credentials["client_email"]
-# print("")
 
 json_filename = "google_credentials.json"
-
-# main.py
-
-SERVICE_ACCOUNT_FILE = "google_credentials.json"
-
 SERVICE_ACCOUNT_FILE = "google_credentials.json"
 credentials = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
@@ -92,46 +93,6 @@ docs_service = build("docs", "v1", credentials=credentials)
 class URLRequest(BaseModel):
     url: str
 
-# def create_chrome_driver():
-#     chrome_options = Options()
-#     chrome_options.add_argument("--headless")  # Run in headless mode (no window)
-#     chrome_options.add_argument("--no-sandbox")  # Required for cloud environments
-#     chrome_options.add_argument("--disable-dev-shm-usage")  # Avoid shared memory crashes
-#     chrome_options.add_argument("--disable-gpu")  # Disable GPU (not needed for text scraping)
-#     chrome_options.add_argument("--window-size=1920,1080")  # Standard full HD window size
-    
-#     # Create a temporary user data directory (fixes session creation issues on cloud)
-#     temp_dir = tempfile.mkdtemp()
-#     chrome_options.add_argument(f"--user-data-dir={temp_dir}")
-    
-#     # Create the Chrome driver
-#     driver = webdriver.Chrome(options=chrome_options)
-#     return driver
-
-# def scrape_url(url: str) -> str:
-#     driver = create_chrome_driver()
-#     try:
-#         driver.get(url)
-#         print("In scrape_url, page loaded.")
-#         body = driver.find_element("tag name", "body")
-#         return body.text
-#     finally:
-#         driver.quit()
-#         print("Driver closed.")
-
-
-# async def scrape_product_info(product_url: str):
-#     print("scrape_product_info")
-#     try:
-#         print("HEREEEEE")
-#         text_content = scrape_url(product_url)  # <-- Direct call, no await needed
-#         print("out of scrape_url")
-#         print(text_content)
-#         return text_content
-#     except Exception as e:
-#         print(f"Error scraping product info: {e}")
-#         return None
-    
 @app.post("/scrape", response_class=PlainTextResponse)
 async def scrape(request: URLRequest):
     print("inside text_content")
@@ -188,12 +149,12 @@ async def trigger_functions(data: RequestData):
         print(f"✅✅✅✅✅ New Google Doc URL: {doc_url}")
         make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email, docs_folder_id)
 
-        # print("Generating Google Docs:")
-        # await generate_amazon_backend_keywords(data.product_url, doc_id, data.keyword_url)
-        # await generate_amazon_bullets(data.product_url, doc_id)
-        # await generate_amazon_description(data.product_url, doc_id)
-        # await generate_amazon_title(data.product_url, doc_id)
-        # print("Results Generatedddd")
+        print("Generating Google Docs:")
+        await generate_amazon_backend_keywords(data.product_url, doc_id, data.keyword_url)
+        await generate_amazon_bullets(data.product_url, doc_id)
+        await generate_amazon_description(data.product_url, doc_id)
+        await generate_amazon_title(data.product_url, doc_id)
+        print("Results Generatedddd")
         return {
             "status": "success", 
             "google_sheets":message,
@@ -330,14 +291,12 @@ def append_to_google_doc(doc_id, text):
 def authenticate_gspread(credentials_file):
     print('authenticate_gspread')
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    # creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
     creds = service_account.Credentials.from_service_account_file(credentials_file, scopes=scope)
     return gspread.authorize(creds)
 
 def get_google_sheet_data(gc, sheet_url):
     print('get_google_sheet_data')
     sheet = gc.open_by_url(sheet_url).sheet1
-    # df = get_as_dataframe(sheet, evaluate_formulas=True, skip_blank_rows=True)
     df = pd.DataFrame(sheet.get_all_records())
     return df.dropna(how="all")
 
@@ -373,29 +332,8 @@ async def scrape_amazon_with_playwright(url):
         return re.sub(r'\s+', ' ', text).strip()
 
 
-
-# async def install_browsers_if_needed():
-#     if not os.path.exists("/app/.cache/ms-playwright"):
-#         print("▶ Installing Playwright Browsers...")
-#         subprocess.run(["playwright", "install", "chromium"], check=True)
-#     else:
-#         print("▶ Browsers already installed.")
-
-
-# async def scrape_amazon_with_playwright(url):
-#     await install_browsers_if_needed()
-#     async with async_playwright() as p:
-#         browser = await p.chromium.launch(headless=True)
-#         page = await browser.new_page()
-#         await page.goto(url, timeout=600000)
-#         text = await page.inner_text('body')
-#         await browser.close()
-#         return re.sub(r'\s+', ' ', text).strip()
-
-
 async def scrape_product_info(product_url):
     print("scrape_product_info")
-    # print(product_url)
     try:
         print("HEREEEEE")
         return await scrape_amazon_with_playwright(product_url)
@@ -473,15 +411,6 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
         return [matches[0]] + [""] * 4
     else:
         return matches[:5] + [""] * (5 - len(matches))
-    
-    # if not content or content.strip().lower() in ["empty string", "structured field", "none", "n/a"]:
-    #     return [""] * 5
-    
-    # # matches = [m.strip().strip('"') for m in content.split("\n") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a", '""']]
-    # matches = list(dict.fromkeys(  
-    # [m.strip().strip('"') for m in content.split("\n") if m.strip().lower() not in ["empty string", "structured field", "none", "n/a", '""', "plaintext"]]
-    # ))
-    # return matches[:5] + [""] * (5 - len(matches))
 
 def compute_similarity(a: str, b: str) -> float:
     return fuzz.token_set_ratio(a, b) / 100
@@ -494,8 +423,6 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
     new_sheet_url = new_spreadsheet.url
     print(f"✅✅✅✅✅ New Google Sheet URL: {new_sheet_url}")
 
-    # folder_id = "1uZ2fYhdztV5GjoNHy8qVb6rLNHWwDEED" parent id
-    # folder_id = "16dRFiBElEm7s2KVPyLTedkw5XJQ-hAiF" #child id
     folder_id = "1BUYZMKdg4d7MTt3aoW6E0Tuk4GTHJlBC"
 
     make_sheet_public_editable(file_id, credentials_file, emails,service_account_email, folder_id)
@@ -802,168 +729,3 @@ async def generate_amazon_description(product_url, doc_id):
 credentials_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
 
-
-#  1. ONLY return values that exactly exist in the Possible Options list.
-#     2. DO NOT guess or assume values. If a clear, supported match is not found, return just `""`.
-#     3. NEVER return the field name itself, placeholder text (like "structured field", "none", or "n/a"), or irrelevant text like `"plaintext"`.
-#     4. If the field expects a specific value (like number of items, year, date), ONLY return it if it's explicitly mentioned in the product info.
-#     5. DO NOT return general categories (e.g., “STEM Kit”) for specific fields like Model Year, Product Launch Date, or Part Number unless it directly fits.
-#     6. DO NOT return the same value more than once.
-
-#     ### ✅ Output Format:
-#     - One matched value per line (no commas, no bullets)
-#     - Each value must be in its raw text form as shown in the Possible Options list
-#     - Do not return any explanations, headers, formatting, or extra text
-#     - If no valid matches are found, return just: `""` (on a single line)
-
-
-
-# def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, service_account_email: str):
-#     """
-#     - Gives editor access to the service account and all specified emails.
-#     - Makes the file viewable by anyone with the link.
-#     """
-#     try:
-#         creds = service_account.Credentials.from_service_account_file(
-#             credentials_file,
-#             scopes=["https://www.googleapis.com/auth/drive"]
-#         )
-#         drive_service = build('drive', 'v3', credentials=creds)
-
-#         # Grant editor access to the service account
-#         permission_sa = {
-#             'type': 'user',
-#             'role': 'writer',
-#             'emailAddress': service_account_email
-#         }
-#         drive_service.permissions().create(
-#             fileId=file_id,
-#             body=permission_sa,
-#             fields='id',
-#             sendNotificationEmail=False
-#         ).execute()
-#         print(f"✅ Editor access granted to service account: {service_account_email}")
-
-#         for viewer_email in {email, "fa19bse069@gmail.com"}:
-#             if viewer_email and viewer_email != service_account_email:
-#                 permission_user = {
-#                     'type': 'user',
-#                     'role': 'writer',
-#                     'emailAddress': viewer_email
-#                 }
-#                 drive_service.permissions().create(
-#                     fileId=file_id,
-#                     body=permission_user,
-#                     fields='id',
-#                     sendNotificationEmail=False
-#                 ).execute()
-#                 print(f"✅ Editor access granted to: {viewer_email}")
-
-#         # if email != service_account_email:
-#         #         permission_user = {
-#         #             'type': 'user',
-#         #             'role': 'writer',
-#         #             'emailAddress': email
-#         #         }
-#         #         drive_service.permissions().create(
-#         #             fileId=file_id,
-#         #             body=permission_user,
-#         #             fields='id',
-#         #             sendNotificationEmail=False
-#         #         ).execute()
-#         #         print(f"✅ Editor access granted to: {email}")
-
-#         # Make the file viewable by anyone with the link
-#         permission_public = {
-#             'type': 'anyone',
-#             'role': 'reader'
-#         }
-#         drive_service.permissions().create(
-#             fileId=file_id,
-#             body=permission_public,
-#             fields='id'
-#         ).execute()
-#         print("🌐 Public viewer access enabled (anyone with the link can view).")
-
-#     except Exception as e:
-#         raise Exception(f"❌ Error setting permissions: {e}")
-
-
-
-# def create_new_google_doc(title: str, credentials_file: str, folder_id: str):
-#     """
-#     Creates a new Google Doc with the given title and moves it to the specified folder.
-#     Returns the document ID and URL.
-#     """
-#     try:
-#         creds = service_account.Credentials.from_service_account_file(
-#             credentials_file,
-#             scopes=["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive"]
-#         )
-#         docs_service = build("docs", "v1", credentials=creds)
-#         drive_service = build("drive", "v3", credentials=creds)
-
-#         # Create the new document
-#         body = {"title": title}
-#         doc = docs_service.documents().create(body=body).execute()
-#         doc_id = doc.get("documentId")
-#         doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
-#         print(f"✅ Created new document: {doc_url}")
-
-#         # Get current parents
-#         file_metadata = drive_service.files().get(fileId=doc_id, fields="parents").execute()
-#         previous_parents = ",".join(file_metadata.get("parents", []))
-
-#         # Move doc to the target folder
-#         drive_service.files().update(
-#             fileId=doc_id,
-#             addParents=folder_id,
-#             removeParents=previous_parents,
-#             fields="id, parents"
-#         ).execute()
-#         print(f"📁 Moved doc to folder ID: {folder_id}")
-
-#         return doc_id, doc_url
-
-#     except Exception as e:
-#         raise Exception(f"Error creating and moving Google Doc: {e}")
-
-
-# def create_new_google_doc(title: str, credentials_file: str):
-#     """
-#     Creates a new Google Doc with the given title using the Docs API.
-#     Returns the document ID and URL.
-#     """
-#     try:
-#         creds = service_account.Credentials.from_service_account_file(
-#             credentials_file,
-#             scopes=["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive"]
-#         )
-#         docs_service = build("docs", "v1", credentials=creds)
-#         body = {"title": title}
-#         doc = docs_service.documents().create(body=body).execute()
-#         doc_id = doc.get("documentId")
-#         doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
-#         print(f"Created new document with title '{title}', ID: {doc_id}")
-#         return doc_id, doc_url
-#     except Exception as e:
-#         raise Exception(f"Error creating new Google Doc: {e}")
-
-
-
-    # 1. Carefully analyze all available product information, including titles, subtitles, descriptions, URLs, and contextual clues.
-    # 2. Use intelligent matching techniques, including:
-    # - Case-insensitive matching for substrings and similar word forms.
-    # - Match on roots and morphological variants (e.g. “engineer”: “Engineering Skills”, “science” : “Scientific Thinking”).
-    # - Handle plural forms, tense changes, and common abbreviations (e.g. “run”: “running”).
-    # - Match similar words or concepts (e.g. “construct” : “construction”).
-    # - Recognize implied educational contexts, synonyms, or keywords (e.g. “STEM” and “Science” can be closely related).
-    # 3. If an option is **not explicitly stated**, but is **strongly implied** by the product’s use case or context, include it.
-    # 4. Return **up to 5 best-matching values** from the possible options based on relevance, inferred meaning, and fuzzy matching.
-    # 5. The output should be **a comma-separated list**, only including the best matches, ranked by relevance.
-    # 6. If no valid matches are found, return an "---"
-    # 7. Avoid hallucination or fabricating attributes. Only return matches that can be **inferred** from the product’s context.
-    # 8. Ignore any terms like "structured field", "empty string", "none", or "n/a".
-    # 9. Return exactly one best‑matching value (a single word) from the possible options, ranked by relevance.
-    # 10. If no valid match exists, return exactly an empty string: "".
-    # 11. Do not include any justifications, explanations, or additional text.
