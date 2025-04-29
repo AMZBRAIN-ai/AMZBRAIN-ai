@@ -16,7 +16,6 @@ playwright
 selenium
 rapidfuzz
 
-# asyncio
 # beautifulsoup4
 # certifi==2025.1.31
 # charset-normalizer==3.4.1
