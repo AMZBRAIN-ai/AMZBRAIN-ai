@@ -392,14 +392,16 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     """
     
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4-turbo",
         messages=[{"role": "user", "content": ai_prompt}]
     )
 
+    print("Prompt tokens:", response)
+
     # print("product_info")
-    print("field_name",field_name)
-    print("field_value",field_value)
-    print("possible_values",possible_values)
+    # print("field_name",field_name)
+    # print("field_value",field_value)
+    # print("possible_values",possible_values)
     
     content = response.choices[0].message.content.strip()
     
@@ -563,7 +565,7 @@ async def generate_amazon_title(product_url, doc_id):
 
     try:
         response = await asyncio.to_thread(client.chat.completions.create,
-            model="gpt-4-turbo",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are an expert in writing Amazon product titles."},
                 {"role": "user", "content": title_prompt}
@@ -605,7 +607,7 @@ async def generate_amazon_bullets(product_url, doc_id):
     """
     try:
         response = await asyncio.to_thread(client.chat.completions.create,
-            model="gpt-4-turbo",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are an expert in writing Amazon product bullet points."},
                 {"role": "user", "content": bullets_prompt}
@@ -688,7 +690,7 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
         if not extracted_keywords:
             return "Failed to generate backend keywords: No product data found"
         response = await asyncio.to_thread(client.chat.completions.create,
-            model="gpt-4o",
+            model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": keywords_prompt}]
         )
         
