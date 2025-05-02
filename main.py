@@ -396,7 +396,6 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
         messages=[{"role": "user", "content": ai_prompt}]
     )
 
-    print("Prompt tokens:", response)
 
     # print("product_info")
     # print("field_name",field_name)
