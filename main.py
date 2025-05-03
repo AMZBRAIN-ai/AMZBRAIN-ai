@@ -303,7 +303,10 @@ def authenticate_gspread(credentials_file):
 def get_google_sheet_data(gc, sheet_url):
     print('get_google_sheet_data')
     sheet = gc.open_by_url(sheet_url).sheet1
+    print(sheet)
     df = pd.DataFrame(sheet.get_all_records())
+    print("in get_google_sheet_data")
+    print(df)
     return df.dropna(how="all")
 
 _playwright_installed = False
@@ -328,6 +331,7 @@ async def scrape_amazon_with_playwright(url):
         page = await browser.new_page()
         await page.goto(url, timeout=600000)
         text = await page.inner_text('body')
+        print(text)
         await browser.close()
         return re.sub(r'\s+', ' ', text).strip()
 
@@ -351,13 +355,13 @@ def clean_match(m):
     m = m.lstrip("-").strip()
     return m.strip('"').strip()
 
-def get_top_matches(product_info, field_name, field_value, possible_values):
+def get_top_matches(product_info, field_name, field_value):
     """Uses OpenAI to find the best matches for a given field from the product description, and justifies them."""
     
     ai_prompt = f"""
-    You are a precise field-matching assistant. Your task is to return the best matching values for a given product field from a list of known possible options.
+    You are a precise field-matching assistant. Your task is to return the best matching values for a given {field_name} from a list of known {field_value} and product_info
 
-    ### Product Information:
+    ### Product Information/product_info:
     {product_info}
 
     ### Field Name:
@@ -366,13 +370,10 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     ### Field Value (Reference from Amazon Sheet):
     {field_value}
 
-    ### Possible Options (from the Google Sheet):
-    {', '.join(possible_values)}
-
     ### 🔒 Rules:
     1. Carefully consider the full product context — titles, descriptions, keywords, use case, etc.
-    2. Match up to 5 values from the Possible Options list that best fit the meaning or implication of the field value and product info.
-    3. Only choose values that exist in the Possible Options list.
+    2. Match up to 5 values from the {field_value} or product_info list that best fit the meaning or implication of the field value and product info.
+    3. Only choose values that exist in the product_info or {field_value} list.
     4. Never include values like "structured field", "empty string", "none", "n/a", or the field name itself.
     5. If no valid match exists, return: (a single line with just two double quotes) => `""`
     6. Output format:
@@ -382,12 +383,19 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     7. if something totally unrelated is mentioned in the {field_name} and  {field_value} then you have to ignore it. dont assume values. eg if the product is shampoo but there is mention of league name or sports or team name you have to ignore
     8. if the product {product_info} is not related to sports then dont write anything in the League Name or Team Name. LEAVE IT EMPTY for example: if the product is related to shampoo and you see {field_name} and  {field_value} related to  team name or league name for example soccer football or anything related to sports DONT WRITE ANYTHING LEAVE IT EMPTY OR JUST WRITE "" STRICTLY
     9. if the {field_name} and {field_value} is about number of items, quantity, part number, size or anything quantity related just return 1 value/1 AI Best Matched
-   10. Note that the following values are same so you can use their {field_value} for the {field_name}:
+    10. If {field_name} is Color then search in product_info and {field_value} for color of the product, else write , "multicolored"    
+    11. If {field_name} is about "Number of Items" or "Item Package Quantity" and its not mentioned in in product_info or {field_value} then write "1" 
+    12. Note that the following values are same so you can use their {field_value} for the {field_name}:
         "Color" and  "Color Map"
         "Required Assembly" and "Is Assembly Required"
         "Target Gender" and "Target Audience"
-        "Included Components" and "Includes Remote"
-
+        "Included Components" and "Includes Remote" are same, if remote is not available in the product then know we are talking about other things that are included with the product eg manual, book, experiements etc, if the product is about a engino stem kit then it includes components "Yes" in {field_value}
+        "Model Year" and "Release Date" and "Manufacture Year" and "Manufacture Date"
+        "size" and "product dimensions" are the same thing
+        "Number of Pieces" and "Number of Items" are thr same
+        if "Manufacturer Minimum Age (MONTHS)" and "Manufacturer Maximum Age (MONTHS)" have the same value then write the same value
+        "Package Type" is "Boxed". write this in best matches
+        Write "Item Form" based on product_info if not EXPLICITLY mentioned 
      Begin now:
     """
     
@@ -398,11 +406,14 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
 
 
     # print("product_info")
-    # print("field_name",field_name)
-    # print("field_value",field_value)
+    print("field_name",field_name)
+    print("field_value",field_value)
     # print("possible_values",possible_values)
+    ### Possible Options (from the Google Sheet):
+    # ', '.join(possible_values)
     
     content = response.choices[0].message.content.strip()
+    # print("content",content) same as ai_matches
     
     banned = [
     "empty string", "structured field", "none", "n/a",
@@ -429,10 +440,6 @@ def get_top_matches(product_info, field_name, field_value, possible_values):
     else:
         return matches[:5] + [""] * (5 - len(matches))
     
-    # if is_specific_field(field_name) and matches:
-    #     return [matches[0]] + [""] * 4
-    # else:
-    #     return matches[:5] + [""] * (5 - len(matches))
 
 async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: str, scrap_url: str, product_url: str, emails: str) -> str:
     gc = authenticate_gspread(credentials_file)
@@ -493,9 +500,14 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
             # If no manual match, use fuzzy matching
             match_field, score = smart_fuzzy_match(field, amazon_field_names, threshold=80)
             value = amazon_field_map[match_field] if match_field else ""
-        possible_options = scrap_df.loc[scrap_df.iloc[:, 0] == field].iloc[:, 1].dropna().tolist()
-        ai_matches = get_top_matches(scraped_text, field, str(value), possible_options)
+        # possible_options = scrap_df.loc[scrap_df.iloc[:, 0] == field].iloc[:, 1].dropna().tolist()
+        # print("possible_options",possible_options )
+        ai_matches = get_top_matches(scraped_text, field, str(value))
+        # ai_matches = get_top_matches(scraped_text, field, str(value), possible_options)
+
+        print("ai_matches", ai_matches)
         ai_matches = ai_matches[:5] + [""] * (5 - len(ai_matches))
+        print("ai_matches after appending", ai_matches)
 
         matched_data["Value"].append(value)
         matched_data["AI Best Matched 1"].append(ai_matches[0])
