@@ -487,7 +487,7 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
 
     amazon_field_names = list(amazon_field_map.keys())
 
-    for field in scrape_fields:
+    for field in scrape_fields[:5]:
         matched_data["Field Name"].append(field)  
          # First try manual mapping
         manual_match = manual_mapping.get(field, None)
