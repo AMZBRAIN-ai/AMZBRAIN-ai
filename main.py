@@ -382,8 +382,8 @@ def scrape_amazon_with_scrapedo(url: str) -> tuple[str, str]:
     if response.status_code != 200:
         raise Exception(f"Scrape.do failed with status {response.status_code}")
 
-    # proxy_ip = response.headers.get("X-Forwarded-For", "unknown")
-    return response.text
+    proxy_ip = response.headers.get("X-Forwarded-For", "unknown")
+    return response.text, proxy_ip
 
 def extract_text_from_html(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
@@ -611,17 +611,14 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
     amazon_df = get_google_sheet_data(gc, amazon_url)
     scrap_df = get_google_sheet_data(gc, scrap_url)
     print("in scrape_amazon_with_scrapedo")
-    scraped_text = scrape_amazon_with_scrapedo(product_url)
-    print("out scrape_amazon_with_scrapedo")
+    text, proxy_ip = scrape_amazon_with_scrapedo(product_url)
+    print("out scrape_amazon_with_scrapedo withb proxy_ip", proxy_ip)
+    scraped_text = extract_text_from_html(text)
 
     # print("proxy ip is", proxy_ip)
-    
     # scraped_text = await scrape_product_info(product_url)
-
     print("Scraped text is")
     # print(scraped_text)
-
-
     if scraped_text is None:
         return "Scraping failed."
 
