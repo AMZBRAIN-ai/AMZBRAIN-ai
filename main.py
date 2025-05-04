@@ -555,7 +555,7 @@ def get_top_matches(product_info, field_name, field_value):
     """
     
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4-turbo",
         messages=[{"role": "user", "content": ai_prompt}]
     )
 
@@ -645,7 +645,7 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
 
     amazon_field_names = list(amazon_field_map.keys())
 
-    for field in scrape_fields[:5]:
+    for field in scrape_fields:
         matched_data["Field Name"].append(field)  
          # First try manual mapping
         manual_match = manual_mapping.get(field, None)
