@@ -370,6 +370,7 @@ async def install_browsers_once():
 #     return re.sub(r"\s+", " ", text)
 
 def scrape_amazon_with_scrapedo(url: str) -> tuple[str, str]:
+    print("inside ")
     if not SCRAPE_DO_API_KEY:
         raise Exception("Missing Scrape.do API key")
 
@@ -381,8 +382,8 @@ def scrape_amazon_with_scrapedo(url: str) -> tuple[str, str]:
     if response.status_code != 200:
         raise Exception(f"Scrape.do failed with status {response.status_code}")
 
-    proxy_ip = response.headers.get("X-Forwarded-For", "unknown")
-    return response.text, proxy_ip
+    # proxy_ip = response.headers.get("X-Forwarded-For", "unknown")
+    return response.text
 
 def extract_text_from_html(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
@@ -489,14 +490,14 @@ def extract_text_from_html(html: str) -> str:
 #         print(f"Error scraping product info: {e}")
 #         return None  
     
-async def scrape_product_info(product_url: str, proxy: str) -> str:
-    print("scrape_product_info")
-    try:
-        print("HEREEEEE")
-        return await scrape_amazon_with_playwright(product_url, proxy)
-    except Exception as e:
-        print(f"Scrape error: {e}")
-        return None
+# async def scrape_product_info(product_url: str, proxy: str) -> str:
+#     print("scrape_product_info")
+#     try:
+#         print("HEREEEEE")
+#         return await scrape_amazon_with_playwright(product_url, proxy)
+#     except Exception as e:
+#         print(f"Scrape error: {e}")
+#         return None
 
 
 def is_specific_field(field_name):
@@ -554,7 +555,7 @@ def get_top_matches(product_info, field_name, field_value):
     """
     
     response = client.chat.completions.create(
-        model="gpt-4-turbo",
+        model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": ai_prompt}]
     )
 
@@ -609,7 +610,13 @@ async def match_and_create_new_google_sheet(credentials_file: str, amazon_url: s
 
     amazon_df = get_google_sheet_data(gc, amazon_url)
     scrap_df = get_google_sheet_data(gc, scrap_url)
-    scraped_text = await scrape_product_info(product_url)
+    print("in scrape_amazon_with_scrapedo")
+    scraped_text = scrape_amazon_with_scrapedo(product_url)
+    print("out scrape_amazon_with_scrapedo")
+
+    # print("proxy ip is", proxy_ip)
+    
+    # scraped_text = await scrape_product_info(product_url)
 
     print("Scraped text is")
     # print(scraped_text)
