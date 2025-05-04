@@ -1,40 +1,30 @@
 import gspread
 import pandas as pd
-import requests
 from bs4 import BeautifulSoup
 from gspread_dataframe import get_as_dataframe, set_with_dataframe
 from oauth2client.service_account import ServiceAccountCredentials
-import openai
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from dotenv import load_dotenv
-import os
 import openai
-from fastapi import FastAPI, HTTPException
-from fastapi import FastAPI
-from pydantic import BaseModel
-import asyncio
-import json
-import re
-import time
-import difflib
 from rapidfuzz import fuzz, process
-from fastapi.responses import JSONResponse
-import subprocess
 from playwright.async_api import async_playwright
-from pydantic import BaseModel
-from fastapi import FastAPI
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from fastapi.responses import PlainTextResponse
 from concurrent.futures import ThreadPoolExecutor
 import tempfile
-
-import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+import asyncio, re, os, random
 import base64
+import requests
 
 load_dotenv()
-# Check if file missing
+SCRAPE_DO_API_KEY = os.getenv("SCRAPE_DO_API_KEY")
+print(f"Scrape.do API Key: {SCRAPE_DO_API_KEY}")
+if not SCRAPE_DO_API_KEY:
+    raise Exception("SCRAPE_DO_API_KEY not loaded from .env")
+
 if not os.path.exists("google_credentials.json"):
     encoded = os.getenv("GOOGLE_CREDENTIALS_BASE64")
     if not encoded:
@@ -93,12 +83,40 @@ docs_service = build("docs", "v1", credentials=credentials)
 class URLRequest(BaseModel):
     url: str
 
-@app.post("/scrape", response_class=PlainTextResponse)
+# @app.post("/scrape", response_class=PlainTextResponse)
+# async def scrape(request: URLRequest):
+#     print("inside text_content")
+#     text_content = await scrape_product_info(request.url)
+#     print("outside text_content")
+#     return text_content
+
+# @app.post("/scrape", response_class=JSONResponse)
+# async def scrape(request: URLRequest):
+#     try:
+#         html = scrape_amazon_with_scrapedo(request.url)
+#         # html, proxy_ip = scrape_amazon_with_scrapedo(request.url)
+        
+#         text = extract_text_from_html(html)
+#         return {
+#             "proxy_used": "scrape.do",
+#             "scraped_text": text or "Failed to extract content."
+#         }
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/scrape", response_class=JSONResponse)
 async def scrape(request: URLRequest):
-    print("inside text_content")
-    text_content = await scrape_product_info(request.url)
-    print("outside text_content")
-    return text_content
+    try:
+        html, proxy_ip = scrape_amazon_with_scrapedo(request.url)
+        print("proxy ip is", proxy_ip)
+        text = extract_text_from_html(html)
+        return {
+            "proxy_used": "scrape.do",
+            "scraped_text": text or "Failed to extract content."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 
 @app.get("/")
 async def read_root():
@@ -323,27 +341,163 @@ async def install_browsers_once():
     #     print("▶ Browsers already installed.")
     # _playwright_installed = True
 
-async def scrape_amazon_with_playwright(url):
-    await install_browsers_once()
-    async with async_playwright() as p:
-        # browser = await p.chromium.launch(headless=True)
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(url, timeout=600000)
-        text = await page.inner_text('body')
-        print(text)
-        await browser.close()
-        return re.sub(r'\s+', ' ', text).strip()
+
+# def scrape_amazon_with_scrapedo(url: str) -> str:
+#     if not SCRAPE_DO_API_KEY:
+#         raise Exception("Missing Scrape.do API key")
+
+#     response = requests.get("http://api.scrape.do", params={
+#         "token": SCRAPE_DO_API_KEY,
+#         "url": url
+#     })
+
+#     if response.status_code != 200:
+#         raise Exception(f"Scrape.do failed with status {response.status_code}")
+
+#     return response.text
+
+# def extract_text_from_html(html: str) -> str:
+#     soup = BeautifulSoup(html, "html.parser")
+#     for tag in soup(["script", "style", "noscript"]):
+#         tag.decompose()
+
+#     # Extract body text
+#     body = soup.body
+#     if not body:
+#         return "No body content found."
+
+#     text = body.get_text(separator=" ", strip=True)
+#     return re.sub(r"\s+", " ", text)
+
+def scrape_amazon_with_scrapedo(url: str) -> tuple[str, str]:
+    if not SCRAPE_DO_API_KEY:
+        raise Exception("Missing Scrape.do API key")
+
+    response = requests.get("http://api.scrape.do", params={
+        "token": SCRAPE_DO_API_KEY,
+        "url": url,
+    })
+
+    if response.status_code != 200:
+        raise Exception(f"Scrape.do failed with status {response.status_code}")
+
+    proxy_ip = response.headers.get("X-Forwarded-For", "unknown")
+    return response.text, proxy_ip
+
+def extract_text_from_html(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+
+    body = soup.body
+    if not body:
+        return "No body content found."
+
+    text = body.get_text(separator=" ", strip=True)
+    return re.sub(r"\s+", " ", text)
+
+# async def scrape_amazon_with_playwright(url: str, proxy: str) -> str:
+#     async with async_playwright() as p:
+#         proxy_config = {"server": proxy} if proxy != "None" else None
+#         print("ENV Proxy:", os.getenv("PROXY_SERVER"))
+
+#         browser = await p.chromium.launch(
+#             headless=True,
+#             args=[
+#                 "--disable-blink-features=AutomationControlled",
+#                 "--no-sandbox",
+#                 "--disable-dev-shm-usage",
+#                 "--disable-gpu",
+#                 "--disable-web-security",
+#             ],
+#             proxy=proxy_config,
+#         )
+
+#         context = await browser.new_context(
+#             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+#             locale="en-US",
+#             extra_http_headers={
+#                 "Accept-Language": "en-US,en;q=0.9",
+#             }
+#         )
+
+#         page = await context.new_page()
+
+#         await page.goto(url, timeout=120000)
+#         await asyncio.sleep(random.uniform(2, 4))
+#         await page.mouse.wheel(0, 1000)
+
+#         html = await page.content()
+#         if "Type the characters you see" in html or "captcha" in html.lower():
+#             raise Exception("CAPTCHA detected. Use better proxy/residential IPs.")
+
+#         text = await page.inner_text("body")
+#         await browser.close()
+#         return re.sub(r'\s+', ' ', text).strip()
 
 
-async def scrape_product_info(product_url):
+# async def scrape_amazon_with_playwright(url):
+#     await install_browsers_once()
+#     async with async_playwright() as p:
+#         browser = await p.chromium.launch(
+#             headless=True,
+#             args=[
+#                 "--disable-blink-features=AutomationControlled",
+#                 "--no-sandbox",
+#                 "--disable-dev-shm-usage"
+#             ]
+#         )
+#         context = await browser.new_context(
+#             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+#             locale="en-US"
+#         )
+#         page = await context.new_page()
+#         await page.goto(url, timeout=60000)
+
+#         await page.wait_for_timeout(3000)
+#         await page.mouse.wheel(0, 1000)
+
+#         html = await page.content()
+#         # print(html[:2000])  # helpful for debugging
+
+#         text = await page.inner_text('body')
+#         print(text)
+#         await browser.close()
+#         return re.sub(r'\s+', ' ', text).strip()
+
+
+# async def scrape_amazon_with_playwright(url):
+#     await install_browsers_once()
+#     async with async_playwright() as p:
+#         # browser = await p.chromium.launch(headless=True)
+#         browser = await p.chromium.launch(headless=True)
+#         page = await browser.new_page()
+#         await page.goto(url, timeout=600000)
+#         text = await page.inner_text('body')
+#         print(text)
+#         await browser.close()
+#         return re.sub(r'\s+', ' ', text).strip()
+
+
+# async def scrape_product_info(product_url):
+#     print("scrape_product_info")
+#     try:
+#         print("HEREEEEE")
+#         return await scrape_amazon_with_playwright(product_url)
+#     except Exception as e:
+#         print(f"Error scraping product info: {e}")
+#         return None  
+    
+async def scrape_product_info(product_url: str, proxy: str) -> str:
     print("scrape_product_info")
     try:
         print("HEREEEEE")
-        return await scrape_amazon_with_playwright(product_url)
+        return await scrape_amazon_with_playwright(product_url, proxy)
     except Exception as e:
-        print(f"Error scraping product info: {e}")
-        return None  
+        print(f"Scrape error: {e}")
+        return None
+
 
 def is_specific_field(field_name):
     return any(keyword in field_name.lower() for keyword in [
