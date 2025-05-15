@@ -73,123 +73,17 @@ async def sheets(request: RequestData):
     return result
 
 
-
-# def extract_fields_with_gpt(matched_df, scraped_text, api_key, worksheet):
-
-#     openai.api_key = api_key
-#     print(f"Type of matched_df: {type(matched_df)}")
-
-#     field_names = matched_df["Field Name"].tolist()
-#     fields_with_values = ""
-#     result_data = {}
-
-#     for field in field_names:
-#         values = matched_df.loc[matched_df["Field Name"] == field, "Value"].values
-#         if len(values) > 0 and values[0]:
-#             value_list = values[0]
-#             if isinstance(value_list, list):
-#                 value_str = ", ".join(map(str, value_list))
-#                 print("ininstance",value_str)
-#             else:
-#                 value_str = str(value_list)
-#                 print("not ininstance",value_str)
-
-#         else:
-#             value_str = field  # Use field name if no value found
-#             print("outer else",value_str)
-
-        
-#         fields_with_values += f"- {field}: [{value_str}]\n"
-        
-#         result_data[field] = value_str
-#         # print("result_data[field]",result_data[field])
-        
-
-#     prompt = f"""
-#         You are a precise field-matching assistant. Your task is to return the best matching values for a given field_name from a list of known field_value (that is available in field_block) and product_info is scraped_text
-#         Rules:
-
-#         1. Carefully consider the full product context.
-#         2. Only choose values that exist in the product_info or field_value list and match the top 5 values from the field_value or product_info list that best fit the meaning or implication of the field value and product info.
-#         3. Do not generate more than 5 best matches per field.
-#         4. Never include values like "structured field", "empty string", "none", "n/a", or the field name itself. If no valid match exists return: `""`
-#         5. Return **only** the matched value (no extra explanation or formatting).
-#         6. Don’t use bullet points, numbers, or dashes.
-#         7. If something totally unrelated is mentioned in the field_name/field_value as compared to product_info then you have to ignore it. Don’t assume values.
-#         8. If the product is not related to sports, leave the field like "League Name" or "Team Name" empty.
-#         9. If the field_name and field_value is about number of items, quantity, part number, size, or anything quantity related, just return **1 value/1 AI Best Matched**.
-#         10. If the field_name is "Color", search in product_info and field_value for the color of the product. If not found, write "multicolored".
-#         11. If the field_name is about "Number of Items" or "Item Package Quantity" and it's not mentioned in the product_info or field_value, write "1".
-#         12. Note that the following values are the same:
-#             - "Color" and "Color Map"
-#             - "Required Assembly" and "Is Assembly Required"
-#             - "Target Gender" and "Target Audience"
-#             - "Included Components" and "Includes Remote" (if remote is not available, return other included components like manual, book, etc)
-#             - "Model Year" and "Release Date" and "Manufacture Year" and "Manufacture Date"
-#             - "size" and "product dimensions"
-#             - "Number of Pieces" and "Number of Items"
-#             - "Active Ingredients" and "Ingredients"
-#             - If "Manufacturer Minimum Age (MONTHS)" and "Manufacturer Maximum Age (MONTHS)" have the same value, return the same value.
-#             - "Package Type" is "Boxed". Write this in best matches.
-#             - Write "Item Form" based on product_info if not EXPLICITLY mentioned.
-
-#         Fields and Example Values:
-#         {fields_with_values}
-
-#         Product Text/scraped_tex:
-#         \"\"\"
-#         {scraped_text}
-#         \"\"\"
-
-#         Return a JSON object where each field maps to the extracted value(s). 
-#         If a field is not found or not mentioned, return 'Not Found' for that field.
-#         The response should be formatted like:
-#         {{
-#             "Brand Name": "Engino",
-#             "Target Audience Keyword": "Boys, Girls",
-#             ...
-#         }}
-#         """
-    
-#     response = client.chat.completions.create(
-#             model="gpt-3.5-turbo",
-#             messages=[
-#                 {"role": "system", "content": "You are a product data matching assistant."},
-#                 {"role": "user", "content": prompt}
-#             ],
-#              temperature=0,
-#              max_tokens=1500,
-#         )
-
-#     content = response.choices[0].message.content.strip()
-
-#     try:
-#         result = json.loads(content)
-#     except json.JSONDecodeError:
-#         result = content
-
-#     print("Result from GPT:", result)
-
-    
-#     for field in field_names:
-#         print("field", field)
-#         best_matches = result.get(field, [])
-#         print("best_matches", best_matches)
-
-#     for index, row in matched_df.iterrows():
-#         field = row["Field Name"]
-#         matched_value = result.get(field, "")
-#         matched_df.at[index, "AI Best Matched 1"] = matched_value
-#     worksheet.update([matched_df.columns.tolist()] + matched_df.values.tolist())
-#     print(result)
-
-#     return result
-
 def extract_fields_with_gpt(matched_df, scraped_text, api_key, worksheet):
     import openai
     import json
 
     openai.api_key = api_key
+
+    print("inside extract_fields_with_gpt")
+    # print(matched_df)
+    print(scraped_text[:100])
+    print(api_key)
+    print(worksheet)
 
     field_names = matched_df["Field Name"].tolist()
     fields_with_values = ""
@@ -202,6 +96,8 @@ def extract_fields_with_gpt(matched_df, scraped_text, api_key, worksheet):
     #         value_str = ", ".join(map(str, values[0]))
     #     fields_with_values += f"- {field}: [{value_str}]\n"
     #     result_data[field] = value_str
+
+    print("going to match fields")
 
     for field in field_names:
         values = matched_df.loc[matched_df["Field Name"] == field, "Value"].values
@@ -273,28 +169,19 @@ def extract_fields_with_gpt(matched_df, scraped_text, api_key, worksheet):
         max_tokens=1500,
     )
 
+    print("response", response)
+
+
     content = response.choices[0].message.content.strip()
+    print("content", content)
+
     try:
         result = json.loads(content)
+        print("result", result)
+
     except json.JSONDecodeError:
         result = {}
-
-    # Parse and populate AI Best Matched columns
-    # for index, row in matched_df.iterrows():
-    #     field = row["Field Name"]
-    #     matched_value = result.get(field, "")
-
-    #     if isinstance(matched_value, str):
-    #         values = [v.strip() for v in matched_value.split(",") if v.strip()]
-    #     elif isinstance(matched_value, list):
-    #         values = [str(v).strip() for v in matched_value if str(v).strip()]
-    #     else:
-    #         values = [str(matched_value).strip()]
-
-    #     for i in range(5):
-    #         col_name = f"AI Best Matched {i+1}"
-    #         matched_df.at[index, col_name] = values[i] if i < len(values) else ""
-
+        print("no result", result)
 
     print("Result from GPT:", result)
 
@@ -303,11 +190,6 @@ def extract_fields_with_gpt(matched_df, scraped_text, api_key, worksheet):
         if best_matches == "Not Found":
             best_matches = ""
         result[field] = best_matches
-
-    # for index, row in matched_df.iterrows():
-    #     field = row["Field Name"]
-    #     matched_value = result.get(field, "")
-    #     matched_df.at[index, "AI Best Matched 1"] = matched_value
 
     for index, row in matched_df.iterrows():
         field = row["Field Name"]
@@ -326,92 +208,6 @@ def extract_fields_with_gpt(matched_df, scraped_text, api_key, worksheet):
 
     worksheet.update([matched_df.columns.tolist()] + matched_df.values.tolist())
     return result
-
-
-# def extract_fields_with_gpt(matched_df, scraped_text, api_key):
-#     import openai
-#     import json
-
-#     openai.api_key = api_key
-
-#     print(f"Type of matched_df: {type(matched_df)}")
-#     # return
-#     field_names = matched_df["Field Name"].tolist()
-#     fields_with_values = ""
-#     for field in field_names:
-#         values = matched_df.loc[matched_df["Field Name"] == field, "Value"].values
-#         if len(values) > 0 and values[0]:
-#             value_list = values[0]
-#             if isinstance(value_list, list):
-#                 value_str = ", ".join(map(str, value_list))
-#             else:
-#                 value_str = str(value_list)
-#         else:
-#             value_str = field
-#         fields_with_values += f"- {field}: [{value_str}]\n"
-
-#     prompt = f"""
-#         You are a precise field-matching assistant. Your task is to return the best matching values for a given field_name from a list of known field_value (that is available in field_block) and product_info is scraped_text
-#         Rules:
-#         1. Carefully consider the full product context.
-#         2. Only choose values that exist in the product_info or field_value list and Match up to 5 values from the field_value or product_info list that best fit the meaning or implication of the field value and product info.
-#         3. Never include values like "structured field", "empty string", "none", "n/a", or the field name itself. If no valid match exists return: `""`
-#         4. Return **one value per line**.
-#         5. Return **only** the matched value (no extra explanation or formatting).
-#         6. Don’t use bullet points, numbers, or dashes.
-#         7. If something totally unrelated is mentioned in the field_name/field_value as compared to product_info then you have to ignore it. Don’t assume values. For example, if the product is shampoo but there is mention of league name or sports or team name, you have to ignore.
-#         8. If the product is not related to sports, leave the field like "League Name" or "Team Name" empty.
-#         9. If the field_name and field_value is about number of items, quantity, part number, size, or anything quantity related, just return **1 value/1 AI Best Matched**.
-#         10. If the field_name is "Color", search in product_info and field_value for the color of the product. If not found, write "multicolored".
-#         11. If the field_name is about "Number of Items" or "Item Package Quantity" and it's not mentioned in the product_info or field_value, write "1".
-#         12. Note that the following values are the same:
-#             - "Color" and "Color Map"
-#             - "Required Assembly" and "Is Assembly Required"
-#             - "Target Gender" and "Target Audience"
-#             - "Included Components" and "Includes Remote" (if remote is not available, return other included components like manual, book, etc)
-#             - "Model Year" and "Release Date" and "Manufacture Year" and "Manufacture Date"
-#             - "size" and "product dimensions"
-#             - "Number of Pieces" and "Number of Items"
-#             - "Active Ingredients" and "Ingredients"
-#             - If "Manufacturer Minimum Age (MONTHS)" and "Manufacturer Maximum Age (MONTHS)" have the same value, return the same value.
-#             - "Package Type" is "Boxed". Write this in best matches.
-#             - Write "Item Form" based on product_info if not EXPLICITLY mentioned.
-
-#         Fields and Example Values:
-#         {fields_with_values}
-
-#         Product Text/scraped_tex:
-#         \"\"\"
-#         {scraped_text}
-#         \"\"\"
-
-#         Return a JSON object where each field maps to the extracted value(s). 
-#         If a field is not found or not mentioned, return 'Not Found' for that field.
-#         The response should be formatted like:
-#         {{
-#             "Brand Name": "Engino",
-#             "Target Audience Keyword": "Boys, Girls",
-#             ...
-#         }}
-#         """
-#     response = client.chat.completions.create(
-#             model="gpt-3.5-turbo",
-#             messages=[
-#                 {"role": "system", "content": "You are a product data matching assistant."},
-#                 {"role": "user", "content": prompt}
-#             ],
-#              temperature=0,
-#              max_tokens=1500,
-#         )
-
-#     content = response.choices[0].message.content.strip()
-
-#     try:
-#         result = json.loads(content)
-#     except json.JSONDecodeError:
-#         result = content
-
-#     return result
 
 
 def scrape_amazon_with_scrapedo(url: str) -> tuple[str, str]:
@@ -502,33 +298,6 @@ def match_and_create_new_google_sheet(credentials_file: str,scrap_url:str,amazon
             for i in range(5):
                 matched_data[f"AI Best Matched {i+1}"].append("")  # Leave empty for all best matched columns
 
-    # for scrape_field in scrape_fields:
-    #     result = get_all_fuzzy_matches(scrape_field, amazon_fields)
-    #     if result:
-    #         best_match = max(result, key=lambda x: x[1])
-    #         amazon_value = amazon_df[amazon_df["Field Name"] == best_match[0]]["valid Values"].values[0]
-    #         print(f"{scrape_field}: {best_match[0]} : {amazon_value}")
-            
-    #         best_matches = [match[0] for match in sorted(result, key=lambda x: x[1], reverse=True)[:5]]
-    #         print("best_matches", best_matches)
-
-    #         # Add data to matched_data
-    #         matched_data["Field Name"].append(scrape_field)
-    #         matched_data["Value"].append(amazon_value)
-    #         matched_data["AI Best Matched 1"].append("")
-    #         matched_data["AI Best Matched 2"].append("")
-    #         matched_data["AI Best Matched 3"].append("")
-    #         matched_data["AI Best Matched 4"].append("")
-    #         matched_data["AI Best Matched 5"].append("")
-    #     else:
-    #         matched_data["Field Name"].append(scrape_field)
-    #         matched_data["Value"].append("")
-    #         matched_data["AI Best Matched 1"].append("")
-    #         matched_data["AI Best Matched 2"].append("")
-    #         matched_data["AI Best Matched 3"].append("")
-    #         matched_data["AI Best Matched 4"].append("")
-    #         matched_data["AI Best Matched 5"].append("")
-
     matched_df = pd.DataFrame(matched_data)
     print("matched_df",matched_df)
     worksheet = new_spreadsheet.sheet1  
@@ -541,8 +310,9 @@ def match_and_create_new_google_sheet(credentials_file: str,scrap_url:str,amazon
     if scraped_text is None:
         return "Scraping failed."
     
+    print("api key outside ",api_key)
     result = extract_fields_with_gpt(matched_df, scraped_text, api_key,worksheet)
-    return {"result": result, "new_sheet_url": new_sheet_url}
+    return new_sheet_url
 
     
 def get_all_fuzzy_matches(scrape_field: str, amazon_fields: list[str], threshold: int = 70) -> list[tuple[str, int]]:

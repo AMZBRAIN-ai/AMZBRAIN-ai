@@ -80,6 +80,52 @@ class URLRequest(BaseModel):
     url: str
 
 
+@app.get("/trigger")
+@app.post("/trigger")
+async def trigger_functions(data: RequestData):
+    try:
+        print("Generating Google Sheet:")
+        message = match_and_create_new_google_sheet(
+            credentials_file, data.scrape_url, data.amazon_url, data.product_url, data.emails
+        )
+    
+        doc_title = "Amazon OpenFields"
+        docs_folder_id = "1bP42e7fENju_sef0UACNdZzRKsvhLSGq"
+        doc_id, doc_url = create_new_google_doc(doc_title, credentials_file, docs_folder_id)
+        print(f"✅✅✅✅✅ New Google Doc URL: {doc_url}")
+        make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email, docs_folder_id)
+
+        print("Generating Google Docs:")
+        await generate_amazon_backend_keywords(data.product_url, doc_id, data.keyword_url)
+        await generate_amazon_bullets(data.product_url, doc_id)
+        await generate_amazon_description(data.product_url, doc_id)
+        await generate_amazon_title(data.product_url, doc_id)
+        print("Results Generatedddd")
+        return {
+            "status": "success", 
+            "google_sheets":message,
+            "google_docs": doc_url
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error triggering /sheets: {e}")
+
+
+
+@app.post("/keywords")
+async def keywords(data:RequestData):
+    try:
+        doc_title = "Amazon OpenFields"
+        docs_folder_id = "1bP42e7fENju_sef0UACNdZzRKsvhLSGq"
+        doc_id, doc_url = create_new_google_doc(doc_title, credentials_file, docs_folder_id)
+        print(f"✅ New Google Doc URL: {doc_url}")
+        make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email, docs_folder_id)
+        keywords = await generate_amazon_backend_keywords(data.product_url, doc_id,data.keyword_url)
+        return {"status": "success", "message": "keywords generated successfully", "keywords":keywords}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error triggering keywords: {e}")
+
+
+
 @app.get("/sheets")
 @app.post("/sheets")
 async def sheets_functions2(data: RequestData):
@@ -619,7 +665,8 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
     🚫 Do NOT write any explanations, introductions, or notes.
     ✅ ONLY return the backend keywords string (500 characters max, no more, no less), space-separated.
 
-    please make sure to generate a total of 500 keywords, dont write more or less
+    Generate a single space-separated string of keywords, totaling exactly 500 characters (not 500 words).
+
     Amazon SEO Backend Keywords Prompt (500 Characters, No Repetition, High Conversion, Feature-Focused)
     Act as an Amazon SEO expert. Generate a backend keyword string of exactly 500 characters to maximize product discoverability while following Amazon's guidelines.
 
@@ -655,12 +702,16 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
         backend_keywords = response.choices[0].message.content.strip()
         print("Generated Amazon Product Keywords")
         backend_keywords = backend_keywords.replace(",", " ")  
-        match = re.match(r'^(.{1,500})\b', backend_keywords)
-        short_keywords = match.group(1) if match else backend_keywords[:500] 
+        match = re.match(r'^(.{1,800})\b', backend_keywords)
+        short_keywords = match.group(1) if match else backend_keywords[:800] 
         append_to_google_doc(doc_id, f"Amazon Keywords:\n{short_keywords}")
 
 
-        return backend_keywords
+        # return backend_keywords
+        keywords_list = backend_keywords.split()
+        cleaned_keywords = ", ".join(keywords_list)
+        append_to_google_doc(doc_id, f"Amazon Keywords:\n{cleaned_keywords}")
+        return cleaned_keywords
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating keywords: {str(e)}")
 
