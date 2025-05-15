@@ -663,12 +663,12 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
     
     You are an Amazon SEO expert.
     🚫 Do NOT write any explanations, introductions, or notes.
-    ✅ ONLY return the backend keywords string (500 characters max, no more, no less), space-separated.
+    ✅ ONLY return the backend keywords string (300 words max, no more, no less), space-separated.
 
-    Generate a single space-separated string of keywords, totaling exactly 500 characters (not 500 words).
+    Generate a single space-separated string of keywords, totaling exactly 300 words (not 500 words).
 
-    Amazon SEO Backend Keywords Prompt (500 Characters, No Repetition, High Conversion, Feature-Focused)
-    Act as an Amazon SEO expert. Generate a backend keyword string of exactly 500 characters to maximize product discoverability while following Amazon's guidelines.
+    Amazon SEO Backend Keywords Prompt (300 words, No Repetition, High Conversion, Feature-Focused)
+    Act as an Amazon SEO expert. Generate a backend keyword string of exactly 300 words to maximize product discoverability while following Amazon's guidelines.
 
     Instructions:
     1️⃣ Extract Unique, High-Relevance Keywords, No Repetition, High Conversion, Feature-Focused from keywords doc/product url whatever is available
@@ -690,30 +690,27 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
     {extracted_keywords}
     ⚠️ FINAL OUTPUT MUST ONLY BE THE KEYWORDS, SPACE-SEPARATED. NO INTRO TEXT, NO BULLETS, NO HEADERS.
     """
+    print("going to try")
+    print("extracted_keywords",extracted_keywords)
 
     try:
         if not extracted_keywords:
+            print("no extracted_keywords")
             return "Failed to generate backend keywords: No product data found"
         response = await asyncio.to_thread(client.chat.completions.create,
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": keywords_prompt}]
         )
-        
         backend_keywords = response.choices[0].message.content.strip()
-        print("Generated Amazon Product Keywords")
-        backend_keywords = backend_keywords.replace(",", " ")  
-        match = re.match(r'^(.{1,800})\b', backend_keywords)
-        short_keywords = match.group(1) if match else backend_keywords[:800] 
-        append_to_google_doc(doc_id, f"Amazon Keywords:\n{short_keywords}")
-
-
-        # return backend_keywords
-        keywords_list = backend_keywords.split()
-        cleaned_keywords = ", ".join(keywords_list)
-        append_to_google_doc(doc_id, f"Amazon Keywords:\n{cleaned_keywords}")
-        return cleaned_keywords
+        backend_keywords = backend_keywords.replace(",", " ")
+        words = backend_keywords.split()
+        limited_keywords = " ".join(words[:300])
+        print("backend_keywords", limited_keywords)
+        append_to_google_doc(doc_id, f"Amazon Keywords:\n{limited_keywords}")
+        return limited_keywords
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating keywords: {str(e)}")
+
 
 async def generate_amazon_description(product_url, doc_id):
     description_prompt = f"""
@@ -1434,7 +1431,7 @@ client = openai.OpenAI(api_key=api_key)
     
 #     You are an Amazon SEO expert.
 #     🚫 Do NOT write any explanations, introductions, or notes.
-#     ✅ ONLY return the backend keywords string (500 characters max, no more, no less), space-separated.
+#     ✅ ONLY return the backend keywords string (300 words max, no more, no less), space-separated.
 
 #     please make sure to generate a total of 500 keywords, dont write more or less
 #     Amazon SEO Backend Keywords Prompt (500 Characters, No Repetition, High Conversion, Feature-Focused)
