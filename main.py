@@ -20,6 +20,8 @@ import base64
 import requests
 import json
 from test2 import match_and_create_new_google_sheet
+from test2 import scrape_amazon_with_scrapedo
+from typing import List
 
 
 load_dotenv()
@@ -150,7 +152,7 @@ async def scrape(request: URLRequest):
         html, proxy_ip = scrape_amazon_with_scrapedo(request.url)
         print("proxy ip is", proxy_ip)
         text = extract_text_from_html(html)
-        print(text)
+        print(text[:100])
         return {
             "proxy_used": "scrape.do",
             "scraped_text": text or "Failed to extract content."
@@ -641,9 +643,16 @@ def extract_keywords_from_sheet(sheet_url):
     df = pd.DataFrame(values[1:], columns=values[0])  
 
     if "keyword" in df.columns and "search volume" in df.columns:
-        df["search volume"] = pd.to_numeric(df["search volume"], errors='coerce')
-        df = df.dropna(subset=["search volume"])
 
+        df["search volume"] = (
+            df["search volume"]
+            .astype(str)
+            .str.replace(",", "", regex=False)
+            .str.replace(" ", "")
+        )
+        df["search volume"] = pd.to_numeric(df["search volume"], errors="coerce")
+        df = df.dropna(subset=["search volume"])
+        df["keyword"] = df["keyword"].astype(str).str.strip().str.replace('"', '').str.replace('\n', '').str.lower()
         df = df.sort_values(by="search volume", ascending=False)
 
         sorted_keywords = df["keyword"].dropna().tolist()
@@ -653,61 +662,154 @@ def extract_keywords_from_sheet(sheet_url):
     return ""
 
 
+# async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
+#     print("keyword_url")
+#     print(keyword_url)
+#     extracted_keywords = extract_keywords_from_sheet(keyword_url)
+#     print("extracted_keywords", extracted_keywords)
+#     keyword_list = extracted_keywords.split()
+#     print("keyword_list", keyword_list)
+#     product_text = ""
+#     combined_input = " ".join(keyword_list)
+
+#     if len(keyword_list) < 500:
+#         print("Fetching product page for more keywords...")
+#         html, proxy_ip = scrape_amazon_with_scrapedo(product_url)
+#         print("proxy ip is", proxy_ip)
+#         text = extract_text_from_html(html)
+#         print("product_text",text[:200])
+#         combined_input = f"{' '.join(keyword_list)} {text}"
+
+#     keywords_prompt = f"""
+#         ⚠️ You are an Amazon SEO Backend Keywords expert.
+#         🚫 Do NOT write any explanations, introductions, or notes.
+#         ✅ ONLY return the backend keywords string (200 words, no more, no less, No Repetition, High Conversion, Feature-Focused), space-separated.
+
+#         Instructions:
+#         - Extract Unique, High-Relevance Keywords from keywords doc/product URL or whatever is available.
+#         - Don’t assume anything; if it’s not in the provided data, don’t include it.
+#         - Remove redundant, closely related, or duplicate keywords (e.g., avoid both "organic shampoo" and "shampoo organic").
+
+#         2️⃣ Follow Amazon's Backend Keyword Policies:
+#         - No commas – separate keywords with spaces.
+#         - No competitor brand names, ASINs, or promotional claims (e.g., avoid "best shampoo," "top-rated").
+#         - No redundant or overlapping keywords.
+
+#         3️⃣ Maximize Discoverability & Conversion Potential:
+#         - Include synonyms, regional spellings, and related terms customers might search for.
+#         - Cover product variations, use cases, and relevant attributes (e.g., size, material, scent, key ingredients).
+#         - Use alternative terms and phrasing to expand search reach.
+#         - Maintain high relevance without repetition or unnecessary words.
+
+#         **Product Information:**
+#         {combined_input}
+
+#         Extract concise, relevant keywords describing the product only from the following text. Focus on the product’s function, benefits, ingredients, target users, health issues addressed, and supplement type.
+
+#         DO NOT include anything related to:
+#         – Shipping or countries
+#         – Payment methods or platforms
+#         – Website navigation (e.g. quick links, contact, terms)
+#         – Discounts, offers, newsletters, or online store operations
+#         – Brand names, shop platforms (e.g. Shopify), or cookie banners
+#         – Header, Footer, Navigation, Discount code eg: "Made In India"
+
+#         Return only keywords that are directly relevant to the product's purpose, contents, effects, and intended users.
+#         """
+#     print("going to try")
+
+#     try:
+#         if not extracted_keywords and not product_text:
+#             print("no extracted_keywords")
+#             return "Failed to generate backend keywords: No product data found"
+#         response = await asyncio.to_thread(client.chat.completions.create,
+#             model="gpt-3.5-turbo",
+#             messages=[{"role": "user", "content": keywords_prompt}]
+#         )
+#         backend_keywords = response.choices[0].message.content.strip()
+#         backend_keywords = backend_keywords.replace(",", " ")
+#         words = backend_keywords.split()
+#         limited_keywords = " ".join(words[:150])
+#         print("backend_keywords", limited_keywords)
+#         append_to_google_doc(doc_id, f"Amazon Keywords:\n{limited_keywords}")
+#         return limited_keywords
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error generating keywords: {str(e)}")
+
 async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
-    print("keyword_url")
-    print(keyword_url)
+   
     extracted_keywords = extract_keywords_from_sheet(keyword_url)
-    print("extracted_keywords")
+    print("extracted_keywords", extracted_keywords)
+    keyword_list = extracted_keywords.split()
+    print("keyword_list", keyword_list)
+
+    required_word_count = 500
+    current_count = len(keyword_list)
+    prompt_word_goal = max(required_word_count - current_count, 0)
+    print("prompt_word_goal",prompt_word_goal)
 
     keywords_prompt = f"""
-    
-    You are an Amazon SEO expert.
-    🚫 Do NOT write any explanations, introductions, or notes.
-    ✅ ONLY return the backend keywords string (300 words max, no more, no less), space-separated.
+        You are an expert Amazon SEO specialist. Your task is to help generate high-quality backend keywords for a product to be used in Amazon's search indexing system.
 
-    Generate a single space-separated string of keywords, totaling exactly 300 words (not 500 words).
+        🔍 The input consists of extracted keywords from a document. If the total number of words is already 500, you don't need to generate anything new. Otherwise, your job is to generate only the missing number of high-quality, buyer-relevant backend keywords to make the total 500.
 
-    Amazon SEO Backend Keywords Prompt (300 words, No Repetition, High Conversion, Feature-Focused)
-    Act as an Amazon SEO expert. Generate a backend keyword string of exactly 300 words to maximize product discoverability while following Amazon's guidelines.
+        ✏️ Keyword Expansion Goal: Generate **{prompt_word_goal}** keywords to supplement the existing ones.
 
-    Instructions:
-    1️⃣ Extract Unique, High-Relevance Keywords, No Repetition, High Conversion, Feature-Focused from keywords doc/product url whatever is available
-    Dont assume anything, if its not written in the provided data then dont write it
-    Remove redundant, closely related, or duplicate keywords (e.g., avoid both "organic shampoo" and "shampoo organic").
+        ✅ DO:
+        - Use real, high-intent search terms customers would type on Amazon.
+        - Focus on features, benefits, materials, use cases, variations, and target users.
+        - All keywords must be **lowercase**, **space-separated**, and **useful**.
+        - Ensure all words are unique (no plural/singular forms of the same word).
 
-    2️⃣ Follow Amazon's Backend Keyword Policies
-    ✅ dont add any commas – Separate keywords with spaces.
-    ✅ No competitor brand names, ASINs, or promotional claims (e.g., avoid "best shampoo," "top-rated").
-    ✅ No redundant or overlapping keywords.
+        🚫 DO NOT:
+        - Use brand names, ASINs, promotional claims, or irrelevant terms.
+        - Use commas, dashes, numbers alone, or line breaks.
+        - Repeat keywords or include synonyms of already included words.
 
-    3️⃣ Maximize Discoverability & Conversion Potential
-    Include synonyms, regional spellings, and related terms customers might search for.
-    Cover product variations, use cases, and relevant attributes (e.g., size, material, scent, key ingredients).
-    Use alternative terms and phrasing to expand search reach.
-    Maintain high relevance without repetition or unnecessary words.
-    **Product Information:**
-    the product url can be of amazon links or different links, you have to study them .
-    {extracted_keywords}
-    ⚠️ FINAL OUTPUT MUST ONLY BE THE KEYWORDS, SPACE-SEPARATED. NO INTRO TEXT, NO BULLETS, NO HEADERS.
+        DONT INCLUDE ANYTHING LIKE THIS "no additional keywords need to be generated as the total number of words is already 500"
+        DONT INCLUDE ANY underlying note
+        📦 STARTING KEYWORDS:
+        {" ".join(keyword_list)}
+
+        🧠 Based on the starting keywords, generate {prompt_word_goal} additional backend keywords to reach EXACTLY 500 total words:
+        DONT GENERATE MORE THAN 500 WORDS!
     """
-    print("going to try")
-    print("extracted_keywords",extracted_keywords)
+    print("keywords_prompt length",len(keywords_prompt))
 
     try:
         if not extracted_keywords:
             print("no extracted_keywords")
             return "Failed to generate backend keywords: No product data found"
-        response = await asyncio.to_thread(client.chat.completions.create,
+        
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": keywords_prompt}]
         )
-        backend_keywords = response.choices[0].message.content.strip()
-        backend_keywords = backend_keywords.replace(",", " ")
-        words = backend_keywords.split()
-        limited_keywords = " ".join(words[:300])
-        print("backend_keywords", limited_keywords)
+
+        generated_keywords = response.choices[0].message.content.strip().replace(",", " ")
+        print("raw generated_keywords:", generated_keywords)
+
+        # Combine original + new keywords
+        combined_keywords = keyword_list + generated_keywords.split()
+
+        # Deduplicate while preserving order (case-insensitive)
+        seen = set()
+        unique_keywords = []
+        for word in combined_keywords:
+            lower = word.lower()
+            if lower not in seen:
+                seen.add(lower)
+                unique_keywords.append(lower)
+
+        # Limit to 200
+        limited_keywords = " ".join(unique_keywords[:200])
+        print("final limited_keywords:", limited_keywords)
+
+        # Save to Google Doc
         append_to_google_doc(doc_id, f"Amazon Keywords:\n{limited_keywords}")
         return limited_keywords
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating keywords: {str(e)}")
 
@@ -1431,7 +1533,7 @@ client = openai.OpenAI(api_key=api_key)
     
 #     You are an Amazon SEO expert.
 #     🚫 Do NOT write any explanations, introductions, or notes.
-#     ✅ ONLY return the backend keywords string (300 words max, no more, no less), space-separated.
+#     ✅ ONLY return the backend keywords string (500 words max, no more, no less), space-separated.
 
 #     please make sure to generate a total of 500 keywords, dont write more or less
 #     Amazon SEO Backend Keywords Prompt (500 Characters, No Repetition, High Conversion, Feature-Focused)
