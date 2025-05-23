@@ -238,7 +238,7 @@ def extract_text_from_html(html: str) -> str:
         return "No body content found."
 
     text = body.get_text(separator=" ", strip=True)
-    print("text is", text[:500])
+    # print("text is v2", ' '.join(text.split()[500:1000]))
     return re.sub(r"\s+", " ", text)
 
 def match_and_create_new_google_sheet(credentials_file: str,scrap_url:str,amazon_url:str, product_url: str, emails: str) -> str:

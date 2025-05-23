@@ -86,7 +86,7 @@ class URLRequest(BaseModel):
 @app.post("/trigger")
 async def trigger_functions(data: RequestData):
     try:
-        print("Generating Google Sheet:")
+        print("Generating Trigger Google Sheet:")
         message = match_and_create_new_google_sheet(
             credentials_file, data.scrape_url, data.amazon_url, data.product_url, data.emails
         )
@@ -105,7 +105,7 @@ async def trigger_functions(data: RequestData):
         print("Results Generatedddd")
         return {
             "status": "success", 
-            "google_sheets":message,
+            # "google_sheets":message,
             "google_docs": doc_url
         }
     except Exception as e:
@@ -303,7 +303,7 @@ def extract_text_from_html(html: str) -> str:
         return "No body content found."
 
     text = body.get_text(separator=" ", strip=True)
-    print("text is", text)
+    # print("text is", text)
     return re.sub(r"\s+", " ", text)
 
 
@@ -553,6 +553,10 @@ credential_file = "google_credentials.json"
 client = openai.OpenAI(api_key=api_key)
 
 async def generate_amazon_title(product_url, doc_id):
+    html, proxy_ip = scrape_amazon_with_scrapedo(product_url)
+    print("proxy ip is", proxy_ip)
+    text = extract_text_from_html(html)
+
     title_prompt = f"""
     You are an expert in writing Amazon product titles optimized for search and conversions.  
     Your task is to generate a compelling, keyword-rich title using the exact product details provided.  
@@ -566,7 +570,7 @@ async def generate_amazon_title(product_url, doc_id):
     - Keep it concise, **within Amazon's 200-character limit**.  
     - **JUST return the Amazon-style product title with no extra text.**  
 
-    **URL:** {product_url}
+    **Product Details:** {text}
     """
 
     try:
@@ -578,13 +582,17 @@ async def generate_amazon_title(product_url, doc_id):
             ]
         )
         title = response.choices[0].message.content.strip()
-        print("Generated Amazon Product Title")
+        print("Generated Amazon Product Title",title)
         append_to_google_doc(doc_id, f"Amazon Product Title:\n{title}")
         return title
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating title: {str(e)}")
 
 async def generate_amazon_bullets(product_url, doc_id):
+    html, proxy_ip = scrape_amazon_with_scrapedo(product_url)
+    print("proxy ip is", proxy_ip)
+    text = extract_text_from_html(html)
+
     bullets_prompt = f"""
     Act as an Amazon SEO expert. Extract **ONLY** verified product details from the provided data—no assumptions, no extra words.  
     Generate **five bullet points** highlighting the **key features and benefits** exactly as described in the product details.  
@@ -609,7 +617,7 @@ async def generate_amazon_bullets(product_url, doc_id):
     ✔ **VERSATILE FOR ANY OCCASION**: Ideal for casual wear, workouts, travel, or lounging at home. Blends comfort and function effortlessly while pairing well with any outfit, making it a must-have staple that adapts to any season or setting with ease.  
 
     ### **Product Information:**  
-    {product_url}  
+    {text}  
     """
     try:
         response = await asyncio.to_thread(client.chat.completions.create,
@@ -815,6 +823,10 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
 
 
 async def generate_amazon_description(product_url, doc_id):
+    html, proxy_ip = scrape_amazon_with_scrapedo(product_url)
+    print("proxy ip is", proxy_ip)
+    text = extract_text_from_html(html)
+
     description_prompt = f"""
     Act as an Amazon copywriting expert with 10+ years of experience crafting high-converting, SEO-optimized product
     descriptions that maximize visibility and drive sales.
@@ -838,7 +850,7 @@ async def generate_amazon_description(product_url, doc_id):
     Provide reassurance on quality, durability, and effectiveness.
     Now, generate a compelling Amazon product description based ONLY on verified product details. Do not fabricate ingredients, materials, reviews, or features that aren't explicitly provided. 
     **Product Information:**
-    {product_url}
+    {text}
 
     eg: Amazon Product Description: 
     Transform your hair care routine with our Natural Shampoo, crafted with the finest ingredients to deliver exceptional results. Gently cleanses hair without stripping natural oils, ensuring a fresh and healthy feel. Nourishes and strengthens hair from root to tip, enhancing overall texture and shine. Promotes a healthy scalp while preventing dryness and irritation, supporting long-term hair wellness. Infused with botanical extracts to provide a refreshing and revitalizing experience after every wash. Free from harsh chemicals, sulfates, and parabens, making it a safe and effective choice for all hair types. Formulated to uphold the highest standards of quality, ensuring long-lasting effectiveness and noticeable improvement in hair health. Elevate your hair care regimen with nature's best ingredients.
@@ -846,7 +858,7 @@ async def generate_amazon_description(product_url, doc_id):
  """
     try:
         """Generates an SEO-optimized Amazon product description."""
-        if not product_url:
+        if not text:
             return "Failed to generate product description: No product data found"
         response = await asyncio.to_thread(client.chat.completions.create,
             model="gpt-3.5-turbo",
