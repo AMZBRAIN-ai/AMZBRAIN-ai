@@ -95,10 +95,10 @@ async def trigger_functions(data: RequestData):
         make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email, docs_folder_id)
 
         print("Generating Google Docs:")
-        await generate_amazon_backend_keywords(data.product_url, doc_id, data.keyword_url)
-        await generate_amazon_bullets(data.product_url, doc_id)
-        await generate_amazon_description(data.product_url, doc_id)
-        await generate_amazon_title(data.product_url, doc_id)
+        # await generate_amazon_backend_keywords(data.product_url, doc_id, data.keyword_url)
+        # await generate_amazon_bullets(data.product_url, doc_id)
+        # await generate_amazon_description(data.product_url, doc_id)
+        # await generate_amazon_title(data.product_url, doc_id)
         print("Results Generatedddd")
         return {
             "status": "success", 
@@ -203,12 +203,13 @@ async def scrape(request: URLRequest):
 #         raise HTTPException(status_code=500, detail=f"Error triggering /sheets: {e}")
 
 
-
 def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, service_account_email: str, folder_id: str):
     """
-    - Gives editor access to the service account and all specified emails.
-    - Makes the file viewable by anyone with the link.
-    - Moves the file into a specific Google Drive folder.
+    - Gives editor access to the service account.
+    - Gives writer access only to Gmail addresses, view-only access to non-Gmail addresses.
+    - Sends notification email.
+    - Moves the file to the correct folder.
+    - Enables public view access.
     """
     try:
         creds = service_account.Credentials.from_service_account_file(
@@ -217,23 +218,22 @@ def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, 
         )
         drive_service = build('drive', 'v3', credentials=creds)
 
-        # First get the file's current parents (so we can remove them)
+        # Get current parents
         file_metadata = drive_service.files().get(
             fileId=file_id,
             fields='parents'
         ).execute()
         previous_parents = ",".join(file_metadata.get('parents', []))
 
-        # Move the file to the specified folder (remove old parents)
+        # Move file to folder
         drive_service.files().update(
             fileId=file_id,
             addParents=folder_id,
             removeParents=previous_parents,
             fields='id, parents'
         ).execute()
-        # print(f"✅ File moved to folder with ID: {folder_id}")
 
-        # Grant editor access to the service account
+        # Give editor access to service account
         permission_sa = {
             'type': 'user',
             'role': 'writer',
@@ -245,24 +245,25 @@ def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, 
             fields='id',
             sendNotificationEmail=True
         ).execute()
-        # print(f"✅ Editor access granted to service account: {service_account_email}")
 
+        # Assign correct role based on email domain (only Gmail addresses get editor access)
         for viewer_email in {email, "dena@amzoptimized.com"}:
             if viewer_email and viewer_email != service_account_email:
+                is_gmail = viewer_email.endswith("@gmail.com")  # Check only for gmail.com
                 permission_user = {
                     'type': 'user',
-                    'role': 'writer',
+                    'role': 'writer' if is_gmail else 'reader',  # Writer if Gmail, Reader if not
                     'emailAddress': viewer_email
                 }
                 drive_service.permissions().create(
                     fileId=file_id,
                     body=permission_user,
                     fields='id',
-                    sendNotificationEmail=True
+                    sendNotificationEmail=True  # Must be true to notify non-Google accounts
                 ).execute()
-                print(f"✅ Editor access granted to: {viewer_email}")
+                print(f"✅ {'Editor' if is_gmail else 'Viewer'} access granted to: {viewer_email}")
 
-        # Make the file viewable by anyone with the link
+        # Public view access (Anyone with the link can view)
         permission_public = {
             'type': 'anyone',
             'role': 'reader'
@@ -272,10 +273,83 @@ def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, 
             body=permission_public,
             fields='id'
         ).execute()
-        # print("🌐 Public viewer access enabled (anyone with the link can view).")
 
     except Exception as e:
         raise Exception(f"❌ Error setting permissions: {e}")
+
+
+# def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, service_account_email: str, folder_id: str):
+#     """
+#     - Gives editor access to the service account and all specified emails.
+#     - Makes the file viewable by anyone with the link.
+#     - Moves the file into a specific Google Drive folder.
+#     """
+#     try:
+#         creds = service_account.Credentials.from_service_account_file(
+#             credentials_file,
+#             scopes=["https://www.googleapis.com/auth/drive"]
+#         )
+#         drive_service = build('drive', 'v3', credentials=creds)
+
+#         # First get the file's current parents (so we can remove them)
+#         file_metadata = drive_service.files().get(
+#             fileId=file_id,
+#             fields='parents'
+#         ).execute()
+#         previous_parents = ",".join(file_metadata.get('parents', []))
+
+#         # Move the file to the specified folder (remove old parents)
+#         drive_service.files().update(
+#             fileId=file_id,
+#             addParents=folder_id,
+#             removeParents=previous_parents,
+#             fields='id, parents'
+#         ).execute()
+#         # print(f"✅ File moved to folder with ID: {folder_id}")
+
+#         # Grant editor access to the service account
+#         permission_sa = {
+#             'type': 'user',
+#             'role': 'writer',
+#             'emailAddress': service_account_email
+#         }
+#         drive_service.permissions().create(
+#             fileId=file_id,
+#             body=permission_sa,
+#             fields='id',
+#             sendNotificationEmail=True
+#         ).execute()
+#         # print(f"✅ Editor access granted to service account: {service_account_email}")
+
+#         for viewer_email in {email, "dena@amzoptimized.com"}:
+#             if viewer_email and viewer_email != service_account_email:
+#                 permission_user = {
+#                     'type': 'user',
+#                     'role': 'writer',
+#                     'emailAddress': viewer_email
+#                 }
+#                 drive_service.permissions().create(
+#                     fileId=file_id,
+#                     body=permission_user,
+#                     fields='id',
+#                     sendNotificationEmail=True
+#                 ).execute()
+#                 print(f"✅ Editor access granted to: {viewer_email}")
+
+#         # Make the file viewable by anyone with the link
+#         permission_public = {
+#             'type': 'anyone',
+#             'role': 'reader'
+#         }
+#         drive_service.permissions().create(
+#             fileId=file_id,
+#             body=permission_public,
+#             fields='id'
+#         ).execute()
+#         # print("🌐 Public viewer access enabled (anyone with the link can view).")
+
+#     except Exception as e:
+#         raise Exception(f"❌ Error setting permissions: {e}")
 
 def append_to_google_doc(doc_id, text):
     print('append_to_google_doc')
