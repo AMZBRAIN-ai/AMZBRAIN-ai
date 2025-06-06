@@ -243,7 +243,7 @@ def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, 
             fileId=file_id,
             body=permission_sa,
             fields='id',
-            sendNotificationEmail=False
+            sendNotificationEmail=True
         ).execute()
         # print(f"✅ Editor access granted to service account: {service_account_email}")
 
@@ -258,7 +258,7 @@ def make_sheet_public_editable(file_id: str, credentials_file: str, email: str, 
                     fileId=file_id,
                     body=permission_user,
                     fields='id',
-                    sendNotificationEmail=False
+                    sendNotificationEmail=True
                 ).execute()
                 print(f"✅ Editor access granted to: {viewer_email}")
 
@@ -474,78 +474,6 @@ def extract_best_matching_values_with_gpt(matched_df, scraped_text) -> pd.DataFr
     return matched_df
 
 
-# async def match_and_create_new_google_sheet(credentials_file: str,scrap_url:str,amazon_url:str, product_url: str, emails: str) -> str:
-    
-#     gc = authenticate_gspread(credentials_file)
-#     new_sheet_title = "Optimized Backend Attributes"
-#     new_spreadsheet = gc.create(new_sheet_title)
-#     file_id = new_spreadsheet.id
-#     new_sheet_url = new_spreadsheet.url
-#     print(f"✅✅✅✅✅ New Google Sheet URL: {new_sheet_url}")
-
-#     folder_id = "1BUYZMKdg4d7MTt3aoW6E0Tuk4GTHJlBC"
-#     make_sheet_public_editable(file_id, credentials_file, emails, service_account_email, folder_id)
-
-#     amazon_df = get_google_sheet_data(gc, amazon_url)
-#     scrap_df = get_google_sheet_data(gc, scrap_url)
-
-#     scrape_fields = scrap_df["Field Name"].tolist()
-#     amazon_fields = amazon_df["Field Name"].tolist()
-
-#     print("First 10 scrape_fields:", scrape_fields[:10])
-#     print("First 10 amazon_fields:", amazon_fields[:10])
-
-#       # Build final output
-#     matched_data = {
-#         "Field Name": [],
-#         "Value": [],
-#         "AI Best Matched 1": [],
-#         "AI Best Matched 2": [],
-#         "AI Best Matched 3": [],
-#         "AI Best Matched 4": [],
-#         "AI Best Matched 5": []
-#     }
-
-#     for scrape_field in scrape_fields:
-#         result = get_all_fuzzy_matches(scrape_field, amazon_fields)
-#         if result:
-#             best_match = max(result, key=lambda x: x[1])
-#             amazon_value = amazon_df[amazon_df["Field Name"] == best_match[0]]["valid Values"].values[0]
-#             print(f"{scrape_field}: {best_match[0]} : {amazon_value}")
-#             best_matches = [match[0] for match in sorted(result, key=lambda x: x[1], reverse=True)[:5]]
-#             print("best_matches", best_matches)
-
-#             # Add data to matched_data
-#             matched_data["Field Name"].append(scrape_field)
-#             matched_data["Value"].append(amazon_value)
-#             matched_data["AI Best Matched 1"].append("")
-#             matched_data["AI Best Matched 2"].append("")
-#             matched_data["AI Best Matched 3"].append("")
-#             matched_data["AI Best Matched 4"].append("")
-#             matched_data["AI Best Matched 5"].append("")
-#         else:
-#             matched_data["Field Name"].append(scrape_field)
-#             matched_data["Value"].append("")
-#             matched_data["AI Best Matched 1"].append("")
-#             matched_data["AI Best Matched 2"].append("")
-#             matched_data["AI Best Matched 3"].append("")
-#             matched_data["AI Best Matched 4"].append("")
-#             matched_data["AI Best Matched 5"].append("")
-
-#     matched_df = pd.DataFrame(matched_data)
-#     print("matched_df",matched_df)
-#     worksheet = new_spreadsheet.sheet1  
-#     worksheet.update([matched_df.columns.tolist()] + matched_df.values.tolist())
-
-#     text, proxy_ip = scrape_amazon_with_scrapedo(product_url)
-#     print("scrape_amazon_with_scrapedo with proxy_ip", proxy_ip)
-
-#     scraped_text = extract_text_from_html(text)
-#     if scraped_text is None:
-#         return "Scraping failed."
-
-#     return new_sheet_url
-
 def create_new_google_doc(title: str, credentials_file: str, folder_id: str):
     try:
         creds = service_account.Credentials.from_service_account_file(
@@ -695,80 +623,6 @@ def extract_keywords_from_sheet(sheet_url):
 
     return ""
 
-
-# async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
-#     print("keyword_url")
-#     print(keyword_url)
-#     extracted_keywords = extract_keywords_from_sheet(keyword_url)
-#     print("extracted_keywords", extracted_keywords)
-#     keyword_list = extracted_keywords.split()
-#     print("keyword_list", keyword_list)
-#     product_text = ""
-#     combined_input = " ".join(keyword_list)
-
-#     if len(keyword_list) < 500:
-#         print("Fetching product page for more keywords...")
-#         html, proxy_ip = scrape_amazon_with_scrapedo(product_url)
-#         print("proxy ip is", proxy_ip)
-#         text = extract_text_from_html(html)
-#         print("product_text",text[:200])
-#         combined_input = f"{' '.join(keyword_list)} {text}"
-
-#     keywords_prompt = f"""
-#         ⚠️ You are an Amazon SEO Backend Keywords expert.
-#         🚫 Do NOT write any explanations, introductions, or notes.
-#         ✅ ONLY return the backend keywords string (200 words, no more, no less, No Repetition, High Conversion, Feature-Focused), space-separated.
-
-#         Instructions:
-#         - Extract Unique, High-Relevance Keywords from keywords doc/product URL or whatever is available.
-#         - Don’t assume anything; if it’s not in the provided data, don’t include it.
-#         - Remove redundant, closely related, or duplicate keywords (e.g., avoid both "organic shampoo" and "shampoo organic").
-
-#         2️⃣ Follow Amazon's Backend Keyword Policies:
-#         - No commas – separate keywords with spaces.
-#         - No competitor brand names, ASINs, or promotional claims (e.g., avoid "best shampoo," "top-rated").
-#         - No redundant or overlapping keywords.
-
-#         3️⃣ Maximize Discoverability & Conversion Potential:
-#         - Include synonyms, regional spellings, and related terms customers might search for.
-#         - Cover product variations, use cases, and relevant attributes (e.g., size, material, scent, key ingredients).
-#         - Use alternative terms and phrasing to expand search reach.
-#         - Maintain high relevance without repetition or unnecessary words.
-
-#         **Product Information:**
-#         {combined_input}
-
-#         Extract concise, relevant keywords describing the product only from the following text. Focus on the product’s function, benefits, ingredients, target users, health issues addressed, and supplement type.
-
-#         DO NOT include anything related to:
-#         – Shipping or countries
-#         – Payment methods or platforms
-#         – Website navigation (e.g. quick links, contact, terms)
-#         – Discounts, offers, newsletters, or online store operations
-#         – Brand names, shop platforms (e.g. Shopify), or cookie banners
-#         – Header, Footer, Navigation, Discount code eg: "Made In India"
-
-#         Return only keywords that are directly relevant to the product's purpose, contents, effects, and intended users.
-#         """
-#     print("going to try")
-
-#     try:
-#         if not extracted_keywords and not product_text:
-#             print("no extracted_keywords")
-#             return "Failed to generate backend keywords: No product data found"
-#         response = await asyncio.to_thread(client.chat.completions.create,
-#             model="gpt-3.5-turbo",
-#             messages=[{"role": "user", "content": keywords_prompt}]
-#         )
-#         backend_keywords = response.choices[0].message.content.strip()
-#         backend_keywords = backend_keywords.replace(",", " ")
-#         words = backend_keywords.split()
-#         limited_keywords = " ".join(words[:150])
-#         print("backend_keywords", limited_keywords)
-#         append_to_google_doc(doc_id, f"Amazon Keywords:\n{limited_keywords}")
-#         return limited_keywords
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error generating keywords: {str(e)}")
 
 async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
    
@@ -2418,3 +2272,151 @@ client = openai.OpenAI(api_key=api_key)
 # #                 "google_docs": f"Error: {str(e)}"
 # #             }
 # #         )
+
+
+# async def match_and_create_new_google_sheet(credentials_file: str,scrap_url:str,amazon_url:str, product_url: str, emails: str) -> str:
+    
+#     gc = authenticate_gspread(credentials_file)
+#     new_sheet_title = "Optimized Backend Attributes"
+#     new_spreadsheet = gc.create(new_sheet_title)
+#     file_id = new_spreadsheet.id
+#     new_sheet_url = new_spreadsheet.url
+#     print(f"✅✅✅✅✅ New Google Sheet URL: {new_sheet_url}")
+
+#     folder_id = "1BUYZMKdg4d7MTt3aoW6E0Tuk4GTHJlBC"
+#     make_sheet_public_editable(file_id, credentials_file, emails, service_account_email, folder_id)
+
+#     amazon_df = get_google_sheet_data(gc, amazon_url)
+#     scrap_df = get_google_sheet_data(gc, scrap_url)
+
+#     scrape_fields = scrap_df["Field Name"].tolist()
+#     amazon_fields = amazon_df["Field Name"].tolist()
+
+#     print("First 10 scrape_fields:", scrape_fields[:10])
+#     print("First 10 amazon_fields:", amazon_fields[:10])
+
+#       # Build final output
+#     matched_data = {
+#         "Field Name": [],
+#         "Value": [],
+#         "AI Best Matched 1": [],
+#         "AI Best Matched 2": [],
+#         "AI Best Matched 3": [],
+#         "AI Best Matched 4": [],
+#         "AI Best Matched 5": []
+#     }
+
+#     for scrape_field in scrape_fields:
+#         result = get_all_fuzzy_matches(scrape_field, amazon_fields)
+#         if result:
+#             best_match = max(result, key=lambda x: x[1])
+#             amazon_value = amazon_df[amazon_df["Field Name"] == best_match[0]]["valid Values"].values[0]
+#             print(f"{scrape_field}: {best_match[0]} : {amazon_value}")
+#             best_matches = [match[0] for match in sorted(result, key=lambda x: x[1], reverse=True)[:5]]
+#             print("best_matches", best_matches)
+
+#             # Add data to matched_data
+#             matched_data["Field Name"].append(scrape_field)
+#             matched_data["Value"].append(amazon_value)
+#             matched_data["AI Best Matched 1"].append("")
+#             matched_data["AI Best Matched 2"].append("")
+#             matched_data["AI Best Matched 3"].append("")
+#             matched_data["AI Best Matched 4"].append("")
+#             matched_data["AI Best Matched 5"].append("")
+#         else:
+#             matched_data["Field Name"].append(scrape_field)
+#             matched_data["Value"].append("")
+#             matched_data["AI Best Matched 1"].append("")
+#             matched_data["AI Best Matched 2"].append("")
+#             matched_data["AI Best Matched 3"].append("")
+#             matched_data["AI Best Matched 4"].append("")
+#             matched_data["AI Best Matched 5"].append("")
+
+#     matched_df = pd.DataFrame(matched_data)
+#     print("matched_df",matched_df)
+#     worksheet = new_spreadsheet.sheet1  
+#     worksheet.update([matched_df.columns.tolist()] + matched_df.values.tolist())
+
+#     text, proxy_ip = scrape_amazon_with_scrapedo(product_url)
+#     print("scrape_amazon_with_scrapedo with proxy_ip", proxy_ip)
+
+#     scraped_text = extract_text_from_html(text)
+#     if scraped_text is None:
+#         return "Scraping failed."
+
+#     return new_sheet_url
+
+
+# async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
+#     print("keyword_url")
+#     print(keyword_url)
+#     extracted_keywords = extract_keywords_from_sheet(keyword_url)
+#     print("extracted_keywords", extracted_keywords)
+#     keyword_list = extracted_keywords.split()
+#     print("keyword_list", keyword_list)
+#     product_text = ""
+#     combined_input = " ".join(keyword_list)
+
+#     if len(keyword_list) < 500:
+#         print("Fetching product page for more keywords...")
+#         html, proxy_ip = scrape_amazon_with_scrapedo(product_url)
+#         print("proxy ip is", proxy_ip)
+#         text = extract_text_from_html(html)
+#         print("product_text",text[:200])
+#         combined_input = f"{' '.join(keyword_list)} {text}"
+
+#     keywords_prompt = f"""
+#         ⚠️ You are an Amazon SEO Backend Keywords expert.
+#         🚫 Do NOT write any explanations, introductions, or notes.
+#         ✅ ONLY return the backend keywords string (200 words, no more, no less, No Repetition, High Conversion, Feature-Focused), space-separated.
+
+#         Instructions:
+#         - Extract Unique, High-Relevance Keywords from keywords doc/product URL or whatever is available.
+#         - Don’t assume anything; if it’s not in the provided data, don’t include it.
+#         - Remove redundant, closely related, or duplicate keywords (e.g., avoid both "organic shampoo" and "shampoo organic").
+
+#         2️⃣ Follow Amazon's Backend Keyword Policies:
+#         - No commas – separate keywords with spaces.
+#         - No competitor brand names, ASINs, or promotional claims (e.g., avoid "best shampoo," "top-rated").
+#         - No redundant or overlapping keywords.
+
+#         3️⃣ Maximize Discoverability & Conversion Potential:
+#         - Include synonyms, regional spellings, and related terms customers might search for.
+#         - Cover product variations, use cases, and relevant attributes (e.g., size, material, scent, key ingredients).
+#         - Use alternative terms and phrasing to expand search reach.
+#         - Maintain high relevance without repetition or unnecessary words.
+
+#         **Product Information:**
+#         {combined_input}
+
+#         Extract concise, relevant keywords describing the product only from the following text. Focus on the product’s function, benefits, ingredients, target users, health issues addressed, and supplement type.
+
+#         DO NOT include anything related to:
+#         – Shipping or countries
+#         – Payment methods or platforms
+#         – Website navigation (e.g. quick links, contact, terms)
+#         – Discounts, offers, newsletters, or online store operations
+#         – Brand names, shop platforms (e.g. Shopify), or cookie banners
+#         – Header, Footer, Navigation, Discount code eg: "Made In India"
+
+#         Return only keywords that are directly relevant to the product's purpose, contents, effects, and intended users.
+#         """
+#     print("going to try")
+
+#     try:
+#         if not extracted_keywords and not product_text:
+#             print("no extracted_keywords")
+#             return "Failed to generate backend keywords: No product data found"
+#         response = await asyncio.to_thread(client.chat.completions.create,
+#             model="gpt-3.5-turbo",
+#             messages=[{"role": "user", "content": keywords_prompt}]
+#         )
+#         backend_keywords = response.choices[0].message.content.strip()
+#         backend_keywords = backend_keywords.replace(",", " ")
+#         words = backend_keywords.split()
+#         limited_keywords = " ".join(words[:150])
+#         print("backend_keywords", limited_keywords)
+#         append_to_google_doc(doc_id, f"Amazon Keywords:\n{limited_keywords}")
+#         return limited_keywords
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error generating keywords: {str(e)}")
