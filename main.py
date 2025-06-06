@@ -82,6 +82,32 @@ class URLRequest(BaseModel):
     url: str
 
 
+@app.get("/docs")
+@app.post("/docs")
+async def trigger_functions(data: RequestData):
+    try:
+        print("Generating Trigger Google Sheet:")
+    
+        doc_title = "Amazon OpenFields"
+        docs_folder_id = "1bP42e7fENju_sef0UACNdZzRKsvhLSGq"
+        doc_id, doc_url = create_new_google_doc(doc_title, credentials_file, docs_folder_id)
+        print(f"✅✅✅✅✅ New Google Doc URL: {doc_url}")
+        make_sheet_public_editable(doc_id, credentials_file, data.emails, service_account_email, docs_folder_id)
+
+        print("Generating Google Docs:")
+        await generate_amazon_backend_keywords(data.product_url, doc_id, data.keyword_url)
+        await generate_amazon_bullets(data.product_url, doc_id)
+        await generate_amazon_description(data.product_url, doc_id)
+        await generate_amazon_title(data.product_url, doc_id)
+        print("Results Generatedddd")
+        return {
+            "status": "success", 
+            "google_docs": doc_url
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error triggering /sheets: {e}")
+
+
 @app.get("/trigger")
 @app.post("/trigger")
 async def trigger_functions(data: RequestData):
@@ -105,7 +131,7 @@ async def trigger_functions(data: RequestData):
         print("Results Generatedddd")
         return {
             "status": "success", 
-            # "google_sheets":message,
+            "google_sheets":message,
             "google_docs": doc_url
         }
     except Exception as e:
