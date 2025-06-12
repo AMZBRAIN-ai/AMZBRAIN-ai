@@ -418,7 +418,6 @@ def get_all_fuzzy_matches(scrape_field: str, amazon_fields: list[str], threshold
     return matches
 
 def extract_best_matching_values_with_gpt(matched_df, scraped_text) -> pd.DataFrame:
-
     print("scraped_text", scraped_text[:100])
 
     fields_to_process = []
@@ -428,110 +427,63 @@ def extract_best_matching_values_with_gpt(matched_df, scraped_text) -> pd.DataFr
         print("field", field)
         print("valid_values", valid_values)
         fields_to_process.append({
-                "index": index,
-                "field_name": field,
-                "valid_values": valid_values
+            "index": index,
+            "field_name": field,
+            "valid_values": valid_values
         })
+
+    # Hardcoded fields from your list
+    fields_list = [
+        "Brand Name", "Unknown", "Unknown", "Model Number", "Model Name", "Manufacturer",
+        "Generic Keywords", "Special Features", "Lifestyle", "Style", "Target Gender", 
+        "Age Range Description", "Material", "Lining Description", "Pattern", "Strap Type", 
+        "Water Resistance Level", "Subject Character", "Colour", "Footwear Size System", 
+        "Occasion", "Part Number", "Theme", "Unknown", "Sole Material", "Toe Style", 
+        "Leather Type", "Height Map", "Product Site Launch Date", "Specific Uses for Product", 
+        "Sport Type", "League Name", "Team Name", "Embellishment Feature", "Heel Height", 
+        "Unknown", "Seasons", "Shoe Width", "Unknown", "Shoe Type", "Softball Variation"
+    ]
+
+    # Create the prompt for GPT to find the values for each field
     prompt = f"""
-        You are a precise field-matching assistant. Your task is to return the best matching values for a given field_name from a list of known valid_values and product_info.
+    You are a field-matching assistant. Your task is to match the following fields with their values extracted from the provided product information.
 
-        Rules:
-        1. Only choose values that exist in the product_info or valid_values list and Match up to 5 values from the valid_values or product_info list that best fit the meaning or implication of the field value and product info.
-        2. Only return matched values. Max 5 per field. No explanation.
-        3. If the field is about quantity, size, or number of items, return only 1 value.
-        4. YOU MUST RETURN YOUR RESPONSE AS A VALID JSON OBJECT with field names as keys and arrays of matched values as values.
-        5. DO NOT wrap your JSON in code blocks or markdown. Return ONLY the raw JSON object.
-        eg:
-        {{"Field Name 1": ["match1", "match2", "match3"],
-        "Field Name 2": ["match1", "match2"]}}
-        Product Info/product_info:
-        \"\"\"{scraped_text}\"\"\"
+    Product Information (scraped_text):
+    \"\"\"{scraped_text}\"\"\"
 
-        Fields:
-        """
+    Fields:
+    """
+    
+    # Add hardcoded fields to the prompt
+    for field in fields_list:
+        prompt += f"\n{field}"
 
-    for item in fields_to_process:
-        prompt += f'\n{item["field_name"]}: {item["valid_values"]}'
-        print("item field_name",item["field_name"])
-        print("item valid_values",item["valid_values"])
-
-    # Call GPT once
+    # Call GPT with the prompt
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a product data matching assistant."},
+                {"role": "system", "content": "You are a product field-matching assistant."},
                 {"role": "user", "content": prompt}
             ],
         )
 
+        # Get GPT's raw response
         matches_raw = response.choices[0].message.content.strip()
         print("📦 GPT Raw Output:\n", matches_raw)
 
-        # Try three parsing approaches in sequence
+        # Try parsing the response as a JSON object
         field_values = {}
-        
-        # Approach 1: Try JSON parsing first
+
         try:
-            # Clean up markdown code blocks if present
-            json_content = matches_raw
-            if matches_raw.startswith("```"):
-                # Extract content between code fence markers
-                code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', matches_raw)
-                if code_block_match:
-                    json_content = code_block_match.group(1).strip()
-            
-            field_values = json.loads(json_content)
+            # Try parsing the response as JSON
+            field_values = json.loads(matches_raw)
             print("✅ JSON parsing successful!")
         except json.JSONDecodeError:
-            print("⚠️ JSON parsing failed. Trying text-based parsing...")
-            
-            # Approach 2: Try text-based parsing
-            try:
-                current_field = None
-                field_values = {}
-                
-                for line in matches_raw.split('\n'):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Skip markdown code fence lines
-                    if line.startswith('```'):
-                        continue
-                    if ':' in line and not line.startswith('-'):
-                        current_field = line.rstrip(':').strip()
-                        field_values[current_field] = []
-                    elif line.startswith('-') and current_field:
-                        value = line[1:].strip()
-                        field_values[current_field].append(value)
-                
-                # Check if we parsed any fields successfully
-                if not field_values:
-                    raise Exception("Text-based parsing failed to extract any fields")
-                print("✅ Text-based parsing successful!")
-                print("Extracted field values:", field_values)
-                
-            except Exception as e:
-                print(f"⚠️ Text-based parsing failed: {e}. Trying regex approach...")
-                
-                # Approach 3: Try regex pattern matching as a last resort
-                field_values = {}
-                field_pattern = re.compile(r'([^:]+):((?:\s*-\s*[^\n]+\s*)+)', re.MULTILINE)
-                value_pattern = re.compile(r'-\s*([^\n]+)')
-                
-                matches = field_pattern.findall(matches_raw)
-                for field_match, values_text in matches:
-                    field_name = field_match.strip()
-                    values = [v.strip() for v in value_pattern.findall(values_text)]
-                    field_values[field_name] = values
-                
-                if not field_values:
-                    print("⚠️ All parsing approaches failed. Returning dataframe unchanged.")
-                else:
-                    print("✅ Regex parsing successful!")
-                    print("Extracted field values:", field_values)
+            print("⚠️ JSON parsing failed. Returning dataframe unchanged.")
+            return matched_df
 
-        # Now update the dataframe with whatever values we parsed
+        # Now update the dataframe with the matched values
         print("Updating dataframe with field values:", field_values)
         for index, row in matched_df.iterrows():
             field_name = row["Field Name"]
@@ -546,6 +498,137 @@ def extract_best_matching_values_with_gpt(matched_df, scraped_text) -> pd.DataFr
         return matched_df
 
     return matched_df
+
+# def extract_best_matching_values_with_gpt(matched_df, scraped_text) -> pd.DataFrame:
+
+#     print("scraped_text", scraped_text[:100])
+
+#     fields_to_process = []
+#     for index, row in matched_df.iterrows():
+#         field = row["Field Name"]
+#         valid_values = row["Value"]
+#         print("field", field)
+#         print("valid_values", valid_values)
+#         fields_to_process.append({
+#                 "index": index,
+#                 "field_name": field,
+#                 "valid_values": valid_values
+#         })
+#     prompt = f"""
+#         You are a precise field-matching assistant. Your task is to return the best matching values for a given field_name from a list of known valid_values and product_info.
+
+#         Rules:
+#         1. Only choose values that exist in the product_info or valid_values list and Match up to 5 values from the valid_values or product_info list that best fit the meaning or implication of the field value and product info.
+#         2. Only return matched values. Max 5 per field. No explanation.
+#         3. If the field is about quantity, size, or number of items, return only 1 value.
+#         4. YOU MUST RETURN YOUR RESPONSE AS A VALID JSON OBJECT with field names as keys and arrays of matched values as values.
+#         5. DO NOT wrap your JSON in code blocks or markdown. Return ONLY the raw JSON object.
+#         6.**Replace** Model Number or Model Name with the ASIN number from the **Product details** section in the scraped product info. The ASIN is located under **Product details > ASIN** and looks like "B01N4DWAY8"
+#         eg:
+#         {{"Field Name 1": ["match1", "match2", "match3"],
+#         "Field Name 2": ["match1", "match2"]}}
+#         Product Info/product_info:
+#         \"\"\"{scraped_text}\"\"\"
+
+#         Fields and Valid Values:
+#         """
+
+#     for item in fields_to_process:
+#         prompt += f'\n{item["field_name"]}: {item["valid_values"]}'
+#         print("item field_name",item["field_name"])
+#         print("item valid_values",item["valid_values"])
+
+#     # Call GPT once
+#     try:
+#         response = client.chat.completions.create(
+#             model="gpt-3.5-turbo",
+#             messages=[
+#                 {"role": "system", "content": "You are a product data matching assistant."},
+#                 {"role": "user", "content": prompt}
+#             ],
+#         )
+
+#         matches_raw = response.choices[0].message.content.strip()
+#         print("📦 GPT Raw Output:\n", matches_raw)
+
+#         # Try three parsing approaches in sequence
+#         field_values = {}
+        
+#         # Approach 1: Try JSON parsing first
+#         try:
+#             # Clean up markdown code blocks if present
+#             json_content = matches_raw
+#             if matches_raw.startswith("```"):
+#                 # Extract content between code fence markers
+#                 code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', matches_raw)
+#                 if code_block_match:
+#                     json_content = code_block_match.group(1).strip()
+            
+#             field_values = json.loads(json_content)
+#             print("✅ JSON parsing successful!")
+#         except json.JSONDecodeError:
+#             print("⚠️ JSON parsing failed. Trying text-based parsing...")
+            
+#             # Approach 2: Try text-based parsing
+#             try:
+#                 current_field = None
+#                 field_values = {}
+                
+#                 for line in matches_raw.split('\n'):
+#                     line = line.strip()
+#                     if not line:
+#                         continue
+#                     # Skip markdown code fence lines
+#                     if line.startswith('```'):
+#                         continue
+#                     if ':' in line and not line.startswith('-'):
+#                         current_field = line.rstrip(':').strip()
+#                         field_values[current_field] = []
+#                     elif line.startswith('-') and current_field:
+#                         value = line[1:].strip()
+#                         field_values[current_field].append(value)
+                
+#                 # Check if we parsed any fields successfully
+#                 if not field_values:
+#                     raise Exception("Text-based parsing failed to extract any fields")
+#                 print("✅ Text-based parsing successful!")
+#                 print("Extracted field values:", field_values)
+                
+#             except Exception as e:
+#                 print(f"⚠️ Text-based parsing failed: {e}. Trying regex approach...")
+                
+#                 # Approach 3: Try regex pattern matching as a last resort
+#                 field_values = {}
+#                 field_pattern = re.compile(r'([^:]+):((?:\s*-\s*[^\n]+\s*)+)', re.MULTILINE)
+#                 value_pattern = re.compile(r'-\s*([^\n]+)')
+                
+#                 matches = field_pattern.findall(matches_raw)
+#                 for field_match, values_text in matches:
+#                     field_name = field_match.strip()
+#                     values = [v.strip() for v in value_pattern.findall(values_text)]
+#                     field_values[field_name] = values
+                
+#                 if not field_values:
+#                     print("⚠️ All parsing approaches failed. Returning dataframe unchanged.")
+#                 else:
+#                     print("✅ Regex parsing successful!")
+#                     print("Extracted field values:", field_values)
+
+#         # Now update the dataframe with whatever values we parsed
+#         print("Updating dataframe with field values:", field_values)
+#         for index, row in matched_df.iterrows():
+#             field_name = row["Field Name"]
+#             matched_values = field_values.get(field_name, [])
+#             print(f"Field: {field_name}, Matched values: {matched_values}")
+#             for i in range(5):
+#                 col = f"AI Best Matched {i+1}"
+#                 matched_df.at[index, col] = matched_values[i] if i < len(matched_values) else ""
+
+#     except Exception as e:
+#         print(f"⚠️ GPT error: {e}")
+#         return matched_df
+
+#     return matched_df
 
 
 def create_new_google_doc(title: str, credentials_file: str, folder_id: str):
@@ -705,7 +788,7 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
     keyword_list = extracted_keywords.split()
     print("keyword_list", keyword_list)
 
-    required_word_count = 500
+    required_word_count = 65
     current_count = len(keyword_list)
     prompt_word_goal = max(required_word_count - current_count, 0)
     print("prompt_word_goal",prompt_word_goal)
@@ -713,7 +796,7 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
     keywords_prompt = f"""
         You are an expert Amazon SEO specialist. Your task is to help generate high-quality backend keywords for a product to be used in Amazon's search indexing system.
 
-        🔍 The input consists of extracted keywords from a document. If the total number of words is already 500, you don't need to generate anything new. Otherwise, your job is to generate only the missing number of high-quality, buyer-relevant backend keywords to make the total 500.
+        🔍 The input consists of extracted keywords from a document. If the total number of words is already 65, you don't need to generate anything new. Otherwise, your job is to generate only the missing number of high-quality, buyer-relevant backend keywords to make the total 65.
 
         ✏️ Keyword Expansion Goal: Generate **{prompt_word_goal}** keywords to supplement the existing ones.
 
@@ -728,13 +811,13 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
         - Use commas, dashes, numbers alone, or line breaks.
         - Repeat keywords or include synonyms of already included words.
 
-        DONT INCLUDE ANYTHING LIKE THIS "no additional keywords need to be generated as the total number of words is already 500"
+        DONT INCLUDE ANYTHING LIKE THIS "no additional keywords need to be generated as the total number of words is already 65"
         DONT INCLUDE ANY underlying note
         📦 STARTING KEYWORDS:
         {" ".join(keyword_list)}
 
-        🧠 Based on the starting keywords, generate {prompt_word_goal} additional backend keywords to reach EXACTLY 500 total words:
-        DONT GENERATE MORE THAN 500 WORDS!
+        🧠 Based on the starting keywords, generate {prompt_word_goal} additional backend keywords to reach EXACTLY 65 total words:
+        DONT GENERATE MORE THAN 65 WORDS!
     """
     print("keywords_prompt length",len(keywords_prompt))
 
@@ -764,8 +847,8 @@ async def generate_amazon_backend_keywords(product_url, doc_id, keyword_url):
                 seen.add(lower)
                 unique_keywords.append(lower)
 
-        # Limit to 200
-        limited_keywords = " ".join(unique_keywords[:200])
+        # Limit to 65
+        limited_keywords = " ".join(unique_keywords[:65])
         print("final limited_keywords:", limited_keywords)
 
         # Save to Google Doc
